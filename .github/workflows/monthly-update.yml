@@ -13,31 +13,33 @@ permissions:
 
 jobs:
   update-data:
-    runs-on: ubuntu-latest
+    # HIRA 게시판이 GitHub 호스트 러너(클라우드 IP)의 요청을 400으로 막아서
+    # 이 잡은 자체 호스트 러너(사용자 PC)에서만 실행한다.
+    runs-on: self-hosted
     steps:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
 
-      - name: Python 설정
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: 의존성 설치
+        shell: bash
         run: pip install -r scripts/requirements.txt
 
       - name: 최신 약제급여목록표 다운로드
+        shell: bash
         run: python scripts/fetch_price_list.py
 
       - name: drugs.json 생성
+        shell: bash
         run: python scripts/parse_price_list.py
 
       - name: DUR 병용금기 규칙 갱신
+        shell: bash
         env:
           DUR_API_KEY: ${{ secrets.DUR_API_KEY }}
         run: python scripts/fetch_dur_rules.py
 
       - name: 변경사항 커밋 및 푸시
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
