@@ -1,7 +1,7 @@
 {
-  "name": "DUR 도우미 - 다제약물 병용금기 확인",
-  "short_name": "DUR 도우미",
-  "description": "여러 약을 함께 넣으면 병용금기·주의사항을 확인해주는 도우미",
+  "name": "알리약 - 다제약물 병용금기 확인",
+  "short_name": "알리약",
+  "description": "여러 약을 함께 넣으면 병용금기·주의사항을 알려주는 알리약",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

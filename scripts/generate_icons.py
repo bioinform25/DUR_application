@@ -1,7 +1,8 @@
 """
-PWA용 앱 아이콘을 코드로 생성한다(디자이너 리소스 없이 캡슐 알약 모양 심볼).
+"알리약" 앱 아이콘을 코드로 생성한다(디자이너 리소스 없이 캡슐 알약 + 알림 신호 모티프).
 한 번 만들어두면 재실행할 필요는 없다 - 로고를 바꾸고 싶을 때만 다시 실행.
 """
+import math
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -12,7 +13,7 @@ ICON_DIR.mkdir(exist_ok=True)
 
 BG = (37, 99, 235)  # --primary
 WHITE = (255, 255, 255)
-LIGHT = (219, 234, 254)
+ACCENT = (251, 146, 60)  # 따뜻한 주황 - "알리다"(알림) 포인트, 캡슐 반쪽 + 신호점에 사용
 
 
 def draw_master(size: int) -> Image.Image:
@@ -23,24 +24,44 @@ def draw_master(size: int) -> Image.Image:
     radius = size * 0.22
     d.rounded_rectangle([0, 0, size - 1, size - 1], radius=radius, fill=BG)
 
-    # 캡슐(알약) 심볼: 가운데 기준 45도 느낌으로 두 반원 + 사각형을 대각선 배치
+    # 캡슐(알약) 심볼: 두 반원 + 사각형을 대각선 배치, 흰색/주황 두 톤(실제 캡슐 느낌 + 브랜드 포인트)
     cap_len = size * 0.62
     cap_w = size * 0.24
     cx, cy = size / 2, size / 2
 
-    capsule = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    cd = ImageDraw.Draw(capsule)
     left = cx - cap_len / 2
     right = cx + cap_len / 2
     top = cy - cap_w / 2
     bottom = cy + cap_w / 2
-    cd.rounded_rectangle([left, top, right, bottom], radius=cap_w / 2, fill=WHITE)
-    # 절반은 옅은 색으로 칠해 캡슐 느낌
-    cd.rectangle([cx, top, right, bottom], fill=LIGHT)
-    cd.rounded_rectangle([left, top, right, bottom], radius=cap_w / 2, outline=WHITE, width=int(size * 0.012))
+
+    # 알약 실루엣(마스크)을 따로 만들어, 두 톤 채색이 둥근 캡슐 밖으로 삐져나오지 않게 클리핑한다.
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([left, top, right, bottom], radius=cap_w / 2, fill=255)
+
+    color_layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    cld = ImageDraw.Draw(color_layer)
+    cld.rectangle([left, top, cx, bottom], fill=WHITE)
+    cld.rectangle([cx, top, right, bottom], fill=ACCENT)
+
+    capsule = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    capsule.paste(color_layer, (0, 0), mask)
+    ImageDraw.Draw(capsule).rounded_rectangle(
+        [left, top, right, bottom], radius=cap_w / 2, outline=WHITE, width=max(1, int(size * 0.012))
+    )
 
     capsule = capsule.rotate(-40, resample=Image.BICUBIC, center=(cx, cy))
     img = Image.alpha_composite(img, capsule)
+
+    # "알리다"를 상징하는 작은 신호점 3개(우상단, 점점 옅어지는 방사형) - 절제된 포인트로만
+    d = ImageDraw.Draw(img)
+    signal_cx, signal_cy = size * 0.775, size * 0.225
+    for i, (r, alpha) in enumerate([(size * 0.05, 255), (size * 0.032, 190), (size * 0.02, 255)]):
+        offset = i * size * 0.075
+        d.ellipse(
+            [signal_cx + offset * 0.35 - r, signal_cy - offset * 0.35 - r,
+             signal_cx + offset * 0.35 + r, signal_cy - offset * 0.35 + r],
+            fill=(*ACCENT, alpha) if i != 2 else (*WHITE, alpha),
+        )
     return img
 
 
