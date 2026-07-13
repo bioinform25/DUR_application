@@ -11,8 +11,18 @@
 (function () {
   "use strict";
 
-  // Firebase 콘솔 > 프로젝트 설정 > 일반 > 내 앱에서 복사한 값으로 교체.
-  const FIREBASE_CONFIG = null;
+  // Firebase 콘솔 > 프로젝트 설정 > 일반 > 내 앱에서 복사한 값.
+  // apiKey는 Firebase 웹 앱의 경우 공개되어도 되는 값(진짜 접근 제어는
+  // Firestore 보안 규칙으로 함) - README의 안내대로 규칙을 반드시 설정할 것.
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyA7m0_YgkQBME3p3nTZjqLdlEnMJDsXigQ",
+    authDomain: "aliyak.firebaseapp.com",
+    projectId: "aliyak",
+    storageBucket: "aliyak.firebasestorage.app",
+    messagingSenderId: "652227945584",
+    appId: "1:652227945584:web:20e8b1882c4ec983a9c0b5",
+    measurementId: "G-RK6YLMGE3Z",
+  };
 
   if (!FIREBASE_CONFIG || typeof firebase === "undefined") {
     console.info("[family-sync] Firebase 설정이 없어 가족 공유 기능이 비활성화됩니다.");

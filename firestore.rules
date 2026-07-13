@@ -1,0 +1,19 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 각자 자기 자신의 users/{내uid} 문서만 읽고 쓸 수 있다 (내가 속한 familyId 저장용)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // families/{6자리코드} 문서: 로그인한 사용자면 코드로 조회(참여 전 존재 확인)는 가능하고,
+    // 생성 시에는 본인을 members에 포함해야 하며, 수정은 "이미 멤버였거나(바구니 갱신)
+    // 새로 멤버가 되는 경우(참여)"에만 허용한다.
+    match /families/{familyId} {
+      allow get: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid in request.resource.data.members;
+      allow update: if request.auth != null &&
+        (request.auth.uid in resource.data.members || request.auth.uid in request.resource.data.members);
+    }
+  }
+}
