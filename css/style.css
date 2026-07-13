@@ -192,6 +192,15 @@ header.top p.subtitle {
 .basket-item .info { min-width: 0; }
 .basket-item .name { font-size: 17px; font-weight: 700; }
 .basket-item .meta { font-size: 13px; color: var(--text-sub); margin-top: 2px; }
+.price-alt {
+  font-size: 13px;
+  color: #0a6e4d;
+  background: #e8f7f0;
+  border-radius: 6px;
+  padding: 6px 9px;
+  margin-top: 6px;
+  display: inline-block;
+}
 
 .basket-item .actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 

@@ -4,6 +4,7 @@
   const state = {
     drugsData: null,
     rulesData: null,
+    productsByCode: {}, // product_code -> 제품 상세 (저렴한 대체약 비교용)
     suggestions: [], // 검색 대상 통합 인덱스
     basket: [],       // 담은 약 목록
     mode: "lay",      // 'lay' | 'expert'
@@ -33,8 +34,13 @@
     ]);
     state.drugsData = await drugsRes.json();
     state.rulesData = await rulesRes.json();
+    state.productsByCode = {};
+    for (const p of state.drugsData.products) {
+      state.productsByCode[p.product_code] = p;
+    }
     buildSuggestionIndex();
     renderDataMeta();
+    renderBasket();
     renderResults();
   }
 
@@ -217,6 +223,26 @@
     return `https://www.health.kr/searchDrug/search_total_result.asp?search_word=${q}&search_flag=all`;
   }
 
+  // 같은 성분코드(=동일 성분·동일 용량·동일 제형)의 다른 제조사 제품 중 더 저렴한 것을 찾는다.
+  // 성분코드가 다르면(예: 용량이 다르면) 가격을 그대로 비교할 수 없어 대상에서 제외한다.
+  function findCheaperAlternative(productCode) {
+    const product = state.productsByCode[productCode];
+    if (!product || product.price == null || !product.ingredient_code) return null;
+    const group = state.drugsData.ingredients[product.ingredient_code];
+    if (!group) return null;
+
+    let cheapest = null;
+    for (const code of group.product_codes) {
+      const p = state.productsByCode[code];
+      if (!p || p.price == null) continue;
+      if (!cheapest || p.price < cheapest.price) cheapest = p;
+    }
+    if (!cheapest || cheapest.product_code === product.product_code || cheapest.price >= product.price) {
+      return null;
+    }
+    return { current: product, cheapest, savings: product.price - cheapest.price };
+  }
+
   function renderBasket() {
     el.basketEmptyMsg.style.display = state.basket.length ? "none" : "block";
     el.basketCount.textContent = state.basket.length ? `담은 약 ${state.basket.length}개` : "";
@@ -224,11 +250,17 @@
     el.basketList.innerHTML = state.basket
       .map((b) => {
         const healthLink = healthKrLink(b.healthSearchName);
+        const alt = b.kind === "product" ? findCheaperAlternative(b.code) : null;
+        const altHtml = alt
+          ? `<div class="price-alt">💡 같은 성분·용량의 <strong>${escapeHtml(alt.cheapest.product_name_display)}</strong>(${escapeHtml(alt.cheapest.company)})이(가)
+             ${alt.savings.toLocaleString()}원 더 저렴합니다 (${alt.current.price.toLocaleString()}원 → ${alt.cheapest.price.toLocaleString()}원)</div>`
+          : "";
         return `
         <li class="basket-item">
           <div class="info">
             <div class="name">${escapeHtml(b.label)}</div>
             <div class="meta">${escapeHtml(b.sub)}</div>
+            ${altHtml}
           </div>
           <div class="actions">
             <a class="link-btn health-link" title="약학정보원에서 상세정보 보기" href="${healthLink}" target="_blank" rel="noopener">약학정보원</a>
