@@ -384,6 +384,7 @@
   function severityBucket(severity) {
     if (severity === "contraindicated") return "contraindicated";
     if (severity === "caution") return "caution";
+    if (severity === "food-interaction") return "food-interaction";
     if (severity === "duplicate") return "duplicate";
     if (["elderly-caution", "age-restricted", "duration-caution", "dose-caution"].includes(severity)) {
       return "advisory";
@@ -395,6 +396,7 @@
     return {
       contraindicated: "병용금기",
       caution: "병용주의",
+      "food-interaction": "음식상호작용",
       duplicate: "효능군중복",
       advisory: "복약 주의",
       other: "기타 주의",
@@ -412,6 +414,9 @@
     if (bucket === "duplicate") {
       return "비슷한 효과의 약을 중복으로 복용하고 있을 수 있습니다. 정말 둘 다 필요한지 약사·의사와 확인해보세요.";
     }
+    if (bucket === "food-interaction") {
+      return "특정 음식과 함께 먹으면 약효나 부작용에 영향을 줄 수 있습니다. 아래 안내를 확인하세요.";
+    }
     if (bucket === "advisory") {
       return `${category || "이 약"}에 해당하는 주의사항이 있습니다. 복용 여부를 약사·의사와 상의하세요.`;
     }
@@ -428,6 +433,26 @@
       for (const rule of rules) {
         if (rule.ingredient_keys.length === 1 && item.ingredientKeys.includes(rule.ingredient_keys[0])) {
           found.push({ rule, items: [item] });
+        }
+      }
+    }
+
+    // 음식-약물 상호작용 (DUR API에는 없어 별도로 큐레이션한 데이터, js/food_interactions.js)
+    for (const item of basket) {
+      for (const food of typeof FOOD_INTERACTIONS !== "undefined" ? FOOD_INTERACTIONS : []) {
+        if (item.ingredientKeys.some((k) => food.ingredient_keys.includes(k))) {
+          found.push({
+            rule: {
+              id: food.id,
+              category: "음식상호작용",
+              severity: "food-interaction",
+              ingredient_keys: item.ingredientKeys,
+              title: `${item.label} + ${food.food}`,
+              description: food.description,
+              management: food.management,
+            },
+            items: [item],
+          });
         }
       }
     }
@@ -536,7 +561,7 @@
       return;
     }
 
-    const order = ["contraindicated", "caution", "duplicate", "advisory", "other"];
+    const order = ["contraindicated", "caution", "food-interaction", "duplicate", "advisory", "other"];
     matches.sort((a, b) => order.indexOf(severityBucket(a.rule.severity)) - order.indexOf(severityBucket(b.rule.severity)));
 
     const risk = buildRiskSummary(matches);
