@@ -50,6 +50,19 @@
     <p class="search-hint">약 이름이 잘 기억나지 않으면
       <a href="https://www.health.kr/searchIdentity/search.asp" target="_blank" rel="noopener">약학정보원 알약 식별 서비스</a>에서 모양·색깔·각인으로 찾아보세요.
     </p>
+
+    <div class="ocr-row">
+      <button type="button" id="ocr-btn" class="clear-btn ocr-btn" hidden>📷 약봉투 사진으로 한 번에 등록</button>
+      <input type="file" id="ocr-file-input" accept="image/*" capture="environment" hidden />
+    </div>
+    <div id="ocr-panel" class="ocr-panel" hidden>
+      <p id="ocr-status"></p>
+      <ul id="ocr-results"></ul>
+      <div class="ocr-panel-actions">
+        <button type="button" id="ocr-add-btn" class="print-btn">선택한 약 담기</button>
+        <button type="button" id="ocr-cancel-btn" class="clear-btn">닫기</button>
+      </div>
+    </div>
   </section>
 
   <section class="card">
@@ -84,6 +97,8 @@
   </p>
 </div>
 
+<!-- 약봉투 사진 OCR용. 이 라이브러리 로딩이 실패해도(오프라인 등) 다른 기능에는 영향 없음 -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
 <script src="js/normalize.js"></script>
 <script src="js/app.js"></script>
 </body>

@@ -30,6 +30,13 @@
     printDate: document.getElementById("print-date"),
     reminderList: document.getElementById("reminder-list"),
     reminderEmptyMsg: document.getElementById("reminder-empty-msg"),
+    ocrBtn: document.getElementById("ocr-btn"),
+    ocrFileInput: document.getElementById("ocr-file-input"),
+    ocrPanel: document.getElementById("ocr-panel"),
+    ocrStatus: document.getElementById("ocr-status"),
+    ocrResults: document.getElementById("ocr-results"),
+    ocrAddBtn: document.getElementById("ocr-add-btn"),
+    ocrCancelBtn: document.getElementById("ocr-cancel-btn"),
   };
 
   // ---------- 데이터 로딩 ----------
@@ -608,6 +615,104 @@
       el.searchInput.value = transcript;
       runSearch();
     });
+  }
+
+  // ---------- 약봉투 사진 OCR 일괄 등록 ----------
+  // Tesseract.js는 index.html에서 defer로 로딩되는데, 이 스크립트는 defer가 아니라서
+  // 타이밍상 window.Tesseract가 아직 없을 수 있다. load 이벤트(모든 defer 스크립트
+  // 실행 완료 후 발생)에서 확인해야 안전하다.
+  window.addEventListener("load", () => {
+    if (window.Tesseract) {
+      el.ocrBtn.hidden = false;
+    } else {
+      console.warn("Tesseract.js를 불러오지 못해 사진 등록 기능을 사용할 수 없습니다.");
+    }
+  });
+
+  el.ocrBtn.addEventListener("click", () => el.ocrFileInput.click());
+  el.ocrCancelBtn.addEventListener("click", () => {
+    el.ocrPanel.hidden = true;
+  });
+
+  el.ocrFileInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file || !window.Tesseract) return;
+
+    el.ocrPanel.hidden = false;
+    el.ocrResults.innerHTML = "";
+    el.ocrAddBtn.style.display = "none";
+    el.ocrStatus.textContent = "사진을 분석하고 있습니다... (처음 실행 시 시간이 좀 걸릴 수 있어요)";
+
+    try {
+      const { data } = await window.Tesseract.recognize(file, "kor+eng");
+      const matches = matchOcrTextToProducts(data.text || "");
+      renderOcrResults(matches);
+    } catch (err) {
+      console.error("OCR 인식 실패", err);
+      el.ocrStatus.textContent = "사진 인식에 실패했습니다. 다시 시도하거나 검색창에 직접 입력해주세요.";
+    }
+  });
+
+  // 인식된 각 줄이 어떤 상품의 '핵심 상품명'(search_name, 용량/괄호 제거된 이름)을
+  // 포함하는지로 후보를 찾는다. OCR 오타에 완전히 강건하진 않지만, 실제 약봉투는
+  // 보통 상품명이 비교적 또렷하게 인쇄되어 있어 이 정도로도 실용적으로 동작한다.
+  function matchOcrTextToProducts(text) {
+    const lines = text
+      .split(/\n+/)
+      .map((l) => l.replace(/\s+/g, "").trim())
+      .filter((l) => l.length >= 2);
+    if (!lines.length || !state.drugsData) return [];
+
+    const foundCodes = new Set();
+    const matches = [];
+    for (const p of state.drugsData.products) {
+      if (!p.search_name || p.search_name.length < 2) continue;
+      const compact = p.search_name.replace(/\s+/g, "");
+      if (lines.some((line) => line.includes(compact))) {
+        foundCodes.add(p.product_code);
+        matches.push(p);
+        if (matches.length >= 30) break; // 후보가 너무 많아지는 것 방지
+      }
+    }
+    return matches;
+  }
+
+  function renderOcrResults(matches) {
+    if (!matches.length) {
+      el.ocrStatus.textContent = "일치하는 약을 찾지 못했습니다. 검색창에 직접 입력해주세요.";
+      el.ocrAddBtn.style.display = "none";
+      return;
+    }
+    el.ocrStatus.textContent = `${matches.length}개의 약을 찾았습니다. 담을 약을 선택하고 아래 버튼을 눌러주세요.`;
+    el.ocrResults.innerHTML = matches
+      .map(
+        (p, idx) => `
+      <li class="ocr-result-item">
+        <label>
+          <input type="checkbox" class="ocr-check" data-idx="${idx}" checked />
+          <span class="name">${escapeHtml(p.product_name_display)}</span>
+          <span class="sub">${escapeHtml(p.company)}</span>
+        </label>
+      </li>`
+      )
+      .join("");
+
+    el.ocrAddBtn.style.display = "";
+    el.ocrAddBtn.onclick = () => {
+      el.ocrResults.querySelectorAll(".ocr-check:checked").forEach((cb) => {
+        const p = matches[Number(cb.getAttribute("data-idx"))];
+        addToBasket({
+          kind: "product",
+          code: p.product_code,
+          label: p.product_name_display,
+          sub: `${p.company} · ${p.ingredient_name_display}`,
+          ingredientKeys: p.ingredient_keys,
+          healthSearchName: p.search_name || p.product_name_display,
+        });
+      });
+      el.ocrPanel.hidden = true;
+    };
   }
 
   // ---------- 초기화 ----------

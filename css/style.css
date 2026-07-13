@@ -204,6 +204,59 @@ header.top p.subtitle {
   color: var(--text-sub);
 }
 
+.ocr-row { margin-top: 10px; }
+
+.ocr-btn {
+  border: 2px dashed var(--border) !important;
+  border-radius: 10px;
+  padding: 10px 14px !important;
+  width: 100%;
+  text-decoration: none !important;
+  font-size: calc(15px * var(--font-zoom, 1));
+}
+.ocr-btn:hover { background: var(--primary-light); border-color: var(--primary); }
+
+.ocr-panel {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fbfcff;
+}
+
+#ocr-status {
+  margin: 0 0 10px;
+  font-size: calc(15px * var(--font-zoom, 1));
+  font-weight: 700;
+}
+
+#ocr-results {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.ocr-result-item label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.ocr-result-item .name { font-size: calc(15px * var(--font-zoom, 1)); font-weight: 700; }
+.ocr-result-item .sub { font-size: calc(13px * var(--font-zoom, 1)); color: var(--text-sub); }
+.ocr-result-item input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; }
+
+.ocr-panel-actions { display: flex; gap: 10px; }
+
 #suggestions {
   position: absolute;
   top: calc(100% + 6px);
@@ -500,6 +553,8 @@ body.mode-expert .lay-only { display: none; }
   .header-controls,
   .search-wrap,
   .search-hint,
+  .ocr-row,
+  .ocr-panel,
   .basket-footer .clear-btn,
   .remove-btn,
   .link-btn,
