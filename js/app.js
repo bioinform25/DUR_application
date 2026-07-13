@@ -5,6 +5,7 @@
     drugsData: null,
     rulesData: null,
     productsByCode: {}, // product_code -> 제품 상세 (저렴한 대체약 비교용)
+    ingredientToGroups: {}, // ingredient_key -> 효능군 이름 목록 (효능군중복 판정용)
     suggestions: [], // 검색 대상 통합 인덱스
     basket: [],       // 담은 약 목록
     mode: "lay",      // 'lay' | 'expert'
@@ -52,6 +53,18 @@
     for (const p of state.drugsData.products) {
       state.productsByCode[p.product_code] = p;
     }
+
+    // 효능군중복: "효능군 -> 소속 성분키 목록"을 "성분키 -> 소속 효능군 목록"으로
+    // 뒤집어둬야, 바구니 두 약의 성분키가 같은 효능군을 공유하는지 빠르게 확인 가능
+    state.ingredientToGroups = {};
+    const duplicateGroups = state.rulesData.duplicate_groups || {};
+    for (const effectName in duplicateGroups) {
+      for (const key of duplicateGroups[effectName]) {
+        if (!state.ingredientToGroups[key]) state.ingredientToGroups[key] = [];
+        state.ingredientToGroups[key].push(effectName);
+      }
+    }
+
     buildSuggestionIndex();
     renderDataMeta();
     renderBasket();
@@ -367,6 +380,7 @@
     if (severity === "contraindicated") return "contraindicated";
     if (severity === "caution") return "caution";
     if (severity === "elderly-caution") return "elderly";
+    if (severity === "duplicate") return "duplicate";
     return "other";
   }
 
@@ -375,6 +389,7 @@
       contraindicated: "병용금기",
       caution: "병용주의",
       elderly: "노인주의 등",
+      duplicate: "효능군중복",
       other: "기타 주의",
     }[bucket];
   }
@@ -385,6 +400,7 @@
       contraindicated: "함께 복용하면 안 되는 조합(병용금기)입니다. 지금 복용 중이라면 반드시 처방한 의사 또는 약사와 상담하세요.",
       caution: "함께 복용 시 주의가 필요한 조합입니다. 복용 전 약사·의사와 상담하는 것이 안전합니다.",
       elderly: "고령 환자는 특히 주의가 필요한 약입니다. 복용 여부를 의사·약사와 상의하세요.",
+      duplicate: "비슷한 효과의 약을 중복으로 복용하고 있을 수 있습니다. 정말 둘 다 필요한지 약사·의사와 확인해보세요.",
       other: "등록된 주의사항이 있습니다. 약사·의사와 상담하세요.",
     }[bucket];
   }
@@ -417,6 +433,35 @@
             found.push({ rule, items: [a, b] });
           }
         }
+
+        // 효능군중복: 미리 정해진 성분쌍이 아니라, 두 약의 성분키가 같은 효능군을
+        // 공유하는지를 그때그때 확인한다 (예: 서로 다른 두 소염진통제를 함께 복용).
+        const seenEffects = new Set();
+        for (const keyA of a.ingredientKeys) {
+          const groupsA = state.ingredientToGroups[keyA];
+          if (!groupsA) continue;
+          for (const keyB of b.ingredientKeys) {
+            if (keyA === keyB) continue;
+            const groupsB = state.ingredientToGroups[keyB];
+            if (!groupsB) continue;
+            for (const effectName of groupsA) {
+              if (!groupsB.includes(effectName) || seenEffects.has(effectName)) continue;
+              seenEffects.add(effectName);
+              found.push({
+                rule: {
+                  id: `DUP-${effectName}`,
+                  category: "효능군중복",
+                  severity: "duplicate",
+                  ingredient_keys: [keyA, keyB],
+                  title: `${effectName} 효능군 중복`,
+                  description: `두 약 모두 '${effectName}' 효능군에 속해 있어 효과가 중복되거나 부작용 위험이 커질 수 있습니다.`,
+                  management: "",
+                },
+                items: [a, b],
+              });
+            }
+          }
+        }
       }
     }
     return found;
@@ -439,7 +484,7 @@
       return;
     }
 
-    const order = ["contraindicated", "caution", "elderly", "other"];
+    const order = ["contraindicated", "caution", "elderly", "duplicate", "other"];
     matches.sort((a, b) => order.indexOf(severityBucket(a.rule.severity)) - order.indexOf(severityBucket(b.rule.severity)));
 
     const summary = `<p class="result-summary"><strong>${matches.length}건</strong>의 주의사항이 발견되었습니다.</p>`;

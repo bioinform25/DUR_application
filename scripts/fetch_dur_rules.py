@@ -1,26 +1,21 @@
 """
 식품의약품안전처 '의약품안전사용서비스(DUR)품목정보' Open API에서
-병용금기 정보를 가져와 data/dur_rules.json으로 정규화한다.
+병용금기 / 노인주의 / 효능군중복주의 정보를 가져와 data/dur_rules.json으로 정규화한다.
 
 API 키가 없으면(로컬 최초 실행, PR 미리보기 등) scripts/mock_dur_rules_seed.json을
 그대로 사용해 프론트엔드가 항상 동작하도록 한다.
 
-⚠️ 엔드포인트 검증 상태
------------------------
-구버전 엔드포인트(1470000/DURPrdlstInfoService)는 실제로 호출해보니 HTTP 500을
-반환해 더 이상 서비스되지 않는 것으로 보인다. 실제 서비스키로 테스트한 결과
-아래의 1471000/DURPrdlstInfoService03 (버전 접미사 03) 엔드포인트가 정상적으로
-요청을 받아 처리한다(키 인증 문제 시 401을 반환 - 즉 엔드포인트 자체는 살아있는
-것으로 확인됨). 응답 필드 매핑(ITEM_NAME, INGR_KOR_NAME, MIXTURE_INGR_KOR_NAME,
-PROHBT_CONTENT 등)은 공개 예제(GitHub: jjscan/data.go.kr-1) 기준으로 작성했으며,
-버전이 03으로 바뀌면서 필드명이 달라졌을 수 있어 최초 실행 로그를 확인해
-필요하면 normalize_items()의 필드명을 조정해야 한다.
+엔드포인트: 1471000/DURPrdlstInfoService03 (실제 서비스키로 테스트해 확인).
+- getUsjntTabooInfoList03  : 병용금기 (성분쌍 단위, MIXTURE_* 필드로 상대 성분 제공)
+- getOdsnAtentInfoList03   : 노인주의 (성분 단일 단위)
+- getEfcyDplctInfoList03   : 효능군중복주의 (성분 단일 + EFFECT_NAME 효능군.
+  같은 효능군에 속한 서로 다른 성분 2개를 함께 먹으면 중복으로 본다 - 병용금기처럼
+  미리 정해진 쌍이 아니라 '같은 그룹에 속하는지'로 런타임에 판정해야 해서, 다른
+  두 오퍼레이션과 달리 rules 배열이 아니라 duplicate_groups(효능군 -> 성분키 목록)
+  형태로 별도 저장한다.
 
-이 API는 '병용금기'만 제공하는 것이 아니라 동일 서비스 그룹 안에
-연령금기(getSpcifyAgrdeTabooInfoList), 임부금기(getPwomanTabooInfoList),
-노인주의(getOdsnAtentInfoList), 효능군중복주의(getEfcyDplctInfoList) 등의
-오퍼레이션도 함께 제공된다. 지금은 핵심인 병용금기만 구현했고, 동일한
-fetch_operation() 패턴으로 나머지도 손쉽게 추가할 수 있다.
+같은 서비스 그룹에 연령금기(getSpcifyAgrdeTabooInfoList03), 임부금기
+(getPwomanTabooInfoList03) 등도 더 있다. 동일한 paginate() 패턴으로 추가할 수 있다.
 """
 import json
 import math
@@ -44,8 +39,12 @@ DATA_DIR = ROOT / "data"
 OUT_FILE = DATA_DIR / "dur_rules.json"
 MOCK_SEED = Path(__file__).resolve().parent / "mock_dur_rules_seed.json"
 
-BASE_URL = "https://apis.data.go.kr/1471000/DURPrdlstInfoService03/getUsjntTabooInfoList03"
-NUM_OF_ROWS = 500  # 이 오퍼레이션이 허용하는 페이지당 최대 건수
+API_BASE = "https://apis.data.go.kr/1471000/DURPrdlstInfoService03"
+URL_USJNT_TABOO = f"{API_BASE}/getUsjntTabooInfoList03"
+URL_ODSN_ATENT = f"{API_BASE}/getOdsnAtentInfoList03"
+URL_EFCY_DPLCT = f"{API_BASE}/getEfcyDplctInfoList03"
+
+NUM_OF_ROWS = 500  # 이 오퍼레이션들이 허용하는 페이지당 최대 건수
 MAX_REFERENCE_ITEMS = 3  # 성분 조합당 예시로 보여줄 실제 제품명 개수
 MAX_RETRIES = 4
 RETRY_BACKOFF_BASE = 1.5  # 초 단위, 지수 백오프
@@ -59,7 +58,7 @@ def get_api_key() -> str:
     return unquote(raw) if raw else ""
 
 
-def fetch_page(service_key: str, page_no: int) -> dict:
+def fetch_page(service_key: str, page_no: int, base_url: str) -> dict:
     """일시적인 502/타임아웃 등은 흔하므로 지수 백오프로 재시도한다."""
     params = {
         "serviceKey": service_key,
@@ -70,7 +69,7 @@ def fetch_page(service_key: str, page_no: int) -> dict:
     last_exc = None
     for attempt in range(MAX_RETRIES):
         try:
-            resp = requests.get(BASE_URL, params=params, timeout=30)
+            resp = requests.get(base_url, params=params, timeout=30)
             resp.raise_for_status()
             return resp.json()
         except Exception as exc:  # noqa: BLE001
@@ -78,45 +77,6 @@ def fetch_page(service_key: str, page_no: int) -> dict:
             if attempt < MAX_RETRIES - 1:
                 time.sleep(RETRY_BACKOFF_BASE * (2 ** attempt))
     raise last_exc
-
-
-def merge_items(items: list, rules_by_pair: dict) -> None:
-    """API는 '성분 조합'이 아니라 '제품 조합' 단위로 행을 준다(동일 성분쌍이 제조사
-    수만큼 중복). 프론트에서 실제로 쓰는 매칭 키(정규화된 성분명 쌍) 기준으로
-    합쳐서 rules_by_pair에 누적한다."""
-    for item in items:
-        ingr_a_kor = (item.get("INGR_KOR_NAME") or "").strip()
-        ingr_a_eng = (item.get("INGR_ENG_NAME") or "").strip()
-        ingr_b_kor = (item.get("MIXTURE_INGR_KOR_NAME") or "").strip()
-        ingr_b_eng = (item.get("MIXTURE_INGR_ENG_NAME") or "").strip()
-
-        # data/drugs.json의 ingredient_keys는 영문 성분명 기준으로 정규화되어 있으므로
-        # 영문명을 우선 사용해야 두 데이터가 같은 키로 매칭된다.
-        key_a = normalize_ingredient_name(ingr_a_eng) or normalize_ingredient_name(ingr_a_kor)
-        key_b = normalize_ingredient_name(ingr_b_eng) or normalize_ingredient_name(ingr_b_kor)
-        if not key_a or not key_b or key_a == key_b:
-            continue
-
-        pair_key = tuple(sorted([key_a, key_b]))
-        entry = rules_by_pair.get(pair_key)
-        if entry is None:
-            entry = {
-                "id": f"DUR-{item.get('DUR_SEQ', '')}",
-                "category": item.get("TYPE_NAME") or "병용금기",
-                "severity": "contraindicated",
-                "ingredient_keys": list(pair_key),
-                "title": f"{ingr_a_kor or ingr_a_eng} - {ingr_b_kor or ingr_b_eng}",
-                "description": item.get("PROHBT_CONTENT") or "",
-                "management": item.get("REMARK") or "",
-                "reference_items": [],
-                "product_pair_count": 0,
-            }
-            rules_by_pair[pair_key] = entry
-
-        entry["product_pair_count"] += 1
-        for name in (item.get("ITEM_NAME"), item.get("MIXTURE_ITEM_NAME")):
-            if name and name not in entry["reference_items"] and len(entry["reference_items"]) < MAX_REFERENCE_ITEMS:
-                entry["reference_items"].append(name)
 
 
 def extract_items(body: dict) -> list:
@@ -131,39 +91,37 @@ def extract_items(body: dict) -> list:
 
 
 def get_body(payload: dict) -> dict:
-    # 이 오퍼레이션의 실제 응답은 {"header":..., "body":...} 형태로, 흔한
+    # 이 오퍼레이션들의 실제 응답은 {"header":..., "body":...} 형태로, 흔한
     # data.go.kr의 {"response":{"header":...,"body":...}} 포맷과 다르다.
     return payload.get("body") or payload.get("response", {}).get("body", {})
 
 
-def fetch_all(service_key: str) -> list:
-    # 1페이지로 총 건수를 파악한다. 여기서 실패하면(키/엔드포인트 문제) 그대로 예외를
-    # 던져 main()이 전체를 목업으로 폴백하도록 한다.
-    first_payload = fetch_page(service_key, 1)
+def paginate(service_key: str, base_url: str, on_items, label: str) -> None:
+    """1페이지로 총 건수를 파악한 뒤 나머지를 배치 동시요청으로 받아 on_items(items)에
+    넘긴다. 실패 페이지는 건너뛰고(극히 일부 손실 감수), 첫 페이지 실패는 그대로
+    예외를 던져 main()이 전체를 목업으로 폴백하도록 한다."""
+    first_payload = fetch_page(service_key, 1, base_url)
     body = get_body(first_payload)
     total_count = int(body.get("totalCount", 0))
     if total_count == 0:
-        return []
+        return
+    on_items(extract_items(body))
 
     total_pages = math.ceil(total_count / NUM_OF_ROWS)
-    rules_by_pair: dict = {}
-    merge_items(extract_items(body), rules_by_pair)
-
     completed = 1
     failed_pages = []
 
     def fetch_one(page_no: int):
         try:
-            payload = fetch_page(service_key, page_no)
+            payload = fetch_page(service_key, page_no, base_url)
             return page_no, extract_items(get_body(payload))
         except Exception:  # noqa: BLE001
             return page_no, None
 
     remaining_pages = list(range(2, total_pages + 1))
-    # concurrent.futures의 Future는 완료된 결과를 계속 들고 있어서, 158만 페이지치
-    # 응답을 전부 한 번에 submit하면 다 처리한 뒤에도 메모리에서 안 빠져 수 GB까지
-    # 불어난다. 배치 단위로 나눠 제출/소비하면서 매 배치가 끝날 때 futures 리스트를
-    # 새로 만들어 이전 배치 결과가 GC될 수 있게 한다.
+    # concurrent.futures의 Future는 완료된 결과를 계속 들고 있어서, 페이지 수가 많은
+    # 오퍼레이션에서 전부 한 번에 submit하면 메모리가 계속 불어난다. 배치 단위로
+    # 나눠 제출/소비하면서 매 배치가 끝날 때 futures를 새로 만들어 GC되게 한다.
     batch_size = CONCURRENT_WORKERS * 10
 
     with ThreadPoolExecutor(max_workers=CONCURRENT_WORKERS) as executor:
@@ -174,28 +132,121 @@ def fetch_all(service_key: str) -> list:
                 page_no, items = future.result()
                 completed += 1
                 if items is None:
-                    # 재시도까지 다 실패한 페이지는 건너뛴다(전체 500건 중 극히 일부 손실).
                     failed_pages.append(page_no)
                 else:
-                    merge_items(items, rules_by_pair)
-            futures = None  # 배치 결과 GC 유도
+                    on_items(items)
+            futures = None
 
-            print(
-                f"[fetch_dur_rules] {completed}/{total_pages}페이지 처리 "
-                f"-> 성분조합 {len(rules_by_pair)}건 (실패 {len(failed_pages)}건)"
-            )
+            print(f"[fetch_dur_rules] [{label}] {completed}/{total_pages}페이지 처리 (실패 {len(failed_pages)}건)")
 
     if failed_pages:
         preview = failed_pages[:20]
         more = "..." if len(failed_pages) > 20 else ""
-        print(f"[fetch_dur_rules] 재시도 후에도 실패한 페이지 {len(failed_pages)}개: {preview}{more}")
+        print(f"[fetch_dur_rules] [{label}] 재시도 후에도 실패한 페이지 {len(failed_pages)}개: {preview}{more}")
 
+
+def ingredient_key_from(item: dict, eng_field: str, kor_field: str) -> str:
+    eng = (item.get(eng_field) or "").strip()
+    kor = (item.get(kor_field) or "").strip()
+    # drugs.json의 ingredient_keys는 영문 성분명 기준으로 정규화되어 있어, 영문명을
+    # 우선 사용해야 두 데이터가 같은 키로 매칭된다.
+    return normalize_ingredient_name(eng) or normalize_ingredient_name(kor)
+
+
+def fetch_usjnt_taboo(service_key: str) -> list:
+    """병용금기: API가 '성분 조합'이 아니라 '제품 조합' 단위로 행을 주므로(동일
+    성분쌍이 제조사 수만큼 중복), 정규화된 성분명 쌍 기준으로 합쳐서 누적한다."""
+    rules_by_pair: dict = {}
+
+    def on_items(items):
+        for item in items:
+            key_a = ingredient_key_from(item, "INGR_ENG_NAME", "INGR_KOR_NAME")
+            key_b = ingredient_key_from(item, "MIXTURE_INGR_ENG_NAME", "MIXTURE_INGR_KOR_NAME")
+            if not key_a or not key_b or key_a == key_b:
+                continue
+
+            pair_key = tuple(sorted([key_a, key_b]))
+            entry = rules_by_pair.get(pair_key)
+            if entry is None:
+                ingr_a_kor = item.get("INGR_KOR_NAME") or item.get("INGR_ENG_NAME") or ""
+                ingr_b_kor = item.get("MIXTURE_INGR_KOR_NAME") or item.get("MIXTURE_INGR_ENG_NAME") or ""
+                entry = {
+                    "id": f"DUR-{item.get('DUR_SEQ', '')}",
+                    "category": item.get("TYPE_NAME") or "병용금기",
+                    "severity": "contraindicated",
+                    "ingredient_keys": list(pair_key),
+                    "title": f"{ingr_a_kor.strip()} - {ingr_b_kor.strip()}",
+                    "description": item.get("PROHBT_CONTENT") or "",
+                    "management": item.get("REMARK") or "",
+                    "reference_items": [],
+                    "product_pair_count": 0,
+                }
+                rules_by_pair[pair_key] = entry
+
+            entry["product_pair_count"] += 1
+            for name in (item.get("ITEM_NAME"), item.get("MIXTURE_ITEM_NAME")):
+                if name and name not in entry["reference_items"] and len(entry["reference_items"]) < MAX_REFERENCE_ITEMS:
+                    entry["reference_items"].append(name)
+
+    paginate(service_key, URL_USJNT_TABOO, on_items, label="병용금기")
     return list(rules_by_pair.values())
 
 
+def fetch_odsn_atent(service_key: str) -> list:
+    """노인주의: 성분 단일 기준 주의사항(상대 약물 없음)."""
+    rules_by_ingr: dict = {}
+
+    def on_items(items):
+        for item in items:
+            key = ingredient_key_from(item, "INGR_ENG_NAME", "INGR_NAME")
+            if not key:
+                continue
+            entry = rules_by_ingr.get(key)
+            if entry is None:
+                ingr_kor = item.get("INGR_NAME") or item.get("INGR_ENG_NAME") or ""
+                entry = {
+                    "id": f"ODSN-{key}",
+                    "category": item.get("TYPE_NAME") or "노인주의",
+                    "severity": "elderly-caution",
+                    "ingredient_keys": [key],
+                    "title": f"{ingr_kor.strip()} (노인주의)",
+                    "description": item.get("PROHBT_CONTENT") or "고령 환자에서 이상반응 위험이 높아 신중한 투여가 필요한 성분입니다.",
+                    "management": item.get("REMARK") or "",
+                    "reference_items": [],
+                    "product_pair_count": 0,
+                }
+                rules_by_ingr[key] = entry
+            entry["product_pair_count"] += 1
+            name = item.get("ITEM_NAME")
+            if name and name not in entry["reference_items"] and len(entry["reference_items"]) < MAX_REFERENCE_ITEMS:
+                entry["reference_items"].append(name)
+
+    paginate(service_key, URL_ODSN_ATENT, on_items, label="노인주의")
+    return list(rules_by_ingr.values())
+
+
+def fetch_efcy_dplct(service_key: str) -> dict:
+    """효능군중복주의: 병용금기처럼 미리 정해진 쌍이 아니라, 같은 EFFECT_NAME(효능군)에
+    속한 서로 다른 성분을 함께 먹으면 중복으로 본다. 그래서 규칙 목록이 아니라
+    '효능군 -> 소속 성분키 목록' 맵으로 반환하고, 실제 두 성분이 겹치는지는
+    프론트에서 바구니 조합마다 판정한다."""
+    groups: dict = {}
+
+    def on_items(items):
+        for item in items:
+            effect_name = (item.get("EFFECT_NAME") or "").strip()
+            key = ingredient_key_from(item, "INGR_ENG_NAME", "INGR_NAME")
+            if not effect_name or not key:
+                continue
+            groups.setdefault(effect_name, set()).add(key)
+
+    paginate(service_key, URL_EFCY_DPLCT, on_items, label="효능군중복")
+    # 성분이 1개뿐인 효능군은 "중복"이 성립하지 않으니 제외
+    return {name: sorted(keys) for name, keys in groups.items() if len(keys) > 1}
+
+
 def load_mock() -> dict:
-    seed = json.loads(MOCK_SEED.read_text(encoding="utf-8"))
-    return seed
+    return json.loads(MOCK_SEED.read_text(encoding="utf-8"))
 
 
 def main() -> int:
@@ -204,36 +255,39 @@ def main() -> int:
     if not service_key:
         print("[fetch_dur_rules] DUR_API_KEY가 설정되지 않아 목업(mock) 데이터를 사용합니다.")
         seed = load_mock()
-        out = {
-            "updated": date.today().isoformat(),
-            "source": seed.get("source", "mock"),
-            "rule_count": len(seed.get("rules", [])),
-            "rules": seed.get("rules", []),
-        }
+        rules = seed.get("rules", [])
+        duplicate_groups = seed.get("duplicate_groups", {})
+        source = seed.get("source", "mock")
     else:
         try:
-            rules = fetch_all(service_key)
+            taboo_rules = fetch_usjnt_taboo(service_key)
+            elderly_rules = fetch_odsn_atent(service_key)
+            duplicate_groups = fetch_efcy_dplct(service_key)
         except Exception as exc:  # noqa: BLE001
             print(f"[fetch_dur_rules] API 호출 실패, 목업으로 대체합니다: {exc}")
             seed = load_mock()
             rules = seed.get("rules", [])
+            duplicate_groups = seed.get("duplicate_groups", {})
             source = f"mock-fallback (API 오류: {exc})"
         else:
-            source = "data.go.kr DUR품목정보 API (getUsjntTabooInfoList03, 병용금기)"
+            rules = taboo_rules + elderly_rules
+            source = "data.go.kr DUR품목정보 API (병용금기+노인주의+효능군중복주의)"
 
-        out = {
-            "updated": date.today().isoformat(),
-            "source": source,
-            "rule_count": len(rules),
-            "rules": rules,
-        }
+    out = {
+        "updated": date.today().isoformat(),
+        "source": source,
+        "rule_count": len(rules),
+        "rules": rules,
+        "duplicate_groups": duplicate_groups,
+        "duplicate_group_count": len(duplicate_groups),
+    }
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    OUT_FILE.write_text(
-        json.dumps(out, ensure_ascii=False, indent=2),
-        encoding="utf-8",
+    OUT_FILE.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(
+        f"[fetch_dur_rules] 저장 완료: {OUT_FILE} "
+        f"(규칙 {out['rule_count']}건, 효능군 {out['duplicate_group_count']}개, source={out['source']})"
     )
-    print(f"[fetch_dur_rules] 저장 완료: {OUT_FILE} (규칙 {out['rule_count']}건, source={out['source']})")
     return 0
 
 

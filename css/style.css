@@ -16,6 +16,9 @@
   --info-bg: #eef1ff;
   --info-border: #5b5fc7;
   --info-text: #33367d;
+  --dup-bg: #f5edfd;
+  --dup-border: #8b5cf6;
+  --dup-text: #4c1d95;
   --radius: 14px;
 }
 
@@ -477,6 +480,7 @@ header.top p.subtitle {
 .result-card.contraindicated { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
 .result-card.caution { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
 .result-card.elderly { background: var(--info-bg); border-color: var(--info-border); color: var(--info-text); }
+.result-card.duplicate { background: var(--dup-bg); border-color: var(--dup-border); color: var(--dup-text); }
 .result-card.other { background: #f3f4f6; border-color: #9ca3af; color: #374151; }
 
 .result-badge {
