@@ -390,4 +390,11 @@
     console.error(err);
     el.results.innerHTML = `<p class="basket-empty">데이터를 불러오지 못했습니다. data/drugs.json, data/dur_rules.json 파일이 있는지 확인하세요.<br>(${escapeHtml(err.message)})</p>`;
   });
+
+  // ---------- PWA: 서비스워커 등록 ----------
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch((err) => console.error("SW 등록 실패", err));
+    });
+  }
 })();
