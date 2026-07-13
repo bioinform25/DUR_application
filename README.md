@@ -40,25 +40,24 @@ python scripts/parse_price_list.py     # data/drugs.json 생성
 python scripts/fetch_dur_rules.py      # data/dur_rules.json 생성 (DUR_API_KEY 없으면 목업)
 ```
 
-## 실제 병용금기 데이터(DUR API) 연동하기
+## 실제 병용금기 데이터(DUR API) 연동
 
-지금은 `scripts/mock_dur_rules_seed.json`에 담긴 8건의 예시 규칙(와파린-클래리스로마이신 등
-실제 성분코드를 기준으로 만든 데모 데이터)으로 동작합니다. 실제 서비스로 쓰려면:
+data.go.kr의 "식품의약품안전처_의약품안전사용서비스(DUR)품목정보" API(`getUsjntTabooInfoList03`)로
+실제 병용금기 데이터(성분 조합 661건, 2026-07-13 기준)를 받아오도록 연동 및 검증을 마쳤습니다.
+`DUR_API_KEY` 환경변수(GitHub Secrets에도 동일한 이름으로 등록)가 없으면
+`scripts/mock_dur_rules_seed.json`의 데모 데이터로 자동 대체됩니다.
 
-1. [공공데이터포털](https://www.data.go.kr/data/15059486/openapi.do)에서
-   "식품의약품안전처_의약품안전사용서비스(DUR)품목정보" Open API 활용신청 후 서비스키 발급
-2. 승인 후 마이페이지의 Swagger 문서에서 `getUsjntTabooInfoList` 오퍼레이션의
-   정확한 엔드포인트(버전 접미사 등)를 확인하고, 다르다면 `scripts/fetch_dur_rules.py`의
-   `BASE_URL` 상수만 수정
-   - ⚠️ 이 스크립트의 엔드포인트/필드명은 공개된 예제 코드를 근거로 작성했고, 이 프로젝트를
-     만드는 시점에는 Swagger 문서를 직접 열람하지 못해 최종 확인이 필요합니다.
-3. GitHub 저장소 Settings → Secrets and variables → Actions에서
-   `DUR_API_KEY`라는 이름으로 발급받은 서비스키를 등록 (자동 갱신 워크플로가 사용)
-4. 로컬 테스트 시에는 환경변수로 지정: `DUR_API_KEY=발급받은키 python scripts/fetch_dur_rules.py`
+키가 없다면:
+1. [공공데이터포털](https://www.data.go.kr/data/15059486/openapi.do)에서 활용신청 후 서비스키 발급(자동승인)
+2. GitHub 저장소 Settings → Secrets and variables → Actions에 `DUR_API_KEY`로 등록
+3. 로컬 테스트: `DUR_API_KEY=발급받은키 python scripts/fetch_dur_rules.py`
+
+전체 데이터가 약 80만 행(제품 조합 단위)이라 페이지당 500건씩 동시 6개 요청으로 받아오며,
+보통 10~15분 정도 걸립니다(재시도/배치 처리로 메모리 사용량과 일시적 오류에 안전하게 처리).
 
 같은 서비스 그룹에는 병용금기 외에도 연령금기·임부금기·노인주의·효능군중복주의 등의
-오퍼레이션이 더 있습니다. `fetch_dur_rules.py`의 `fetch_all`/`normalize_items` 패턴을
-그대로 복제해 추가하면 됩니다.
+오퍼레이션이 더 있습니다. `fetch_dur_rules.py`의 `fetch_all`/`merge_items` 패턴을
+그대로 복제해 추가할 수 있습니다.
 
 ## 매달 자동 갱신
 
@@ -71,6 +70,32 @@ python scripts/fetch_dur_rules.py      # data/dur_rules.json 생성 (DUR_API_KEY
 
 이미 최신 상태면 다운로드를 건너뛰므로 매일 재시도해도 안전합니다.
 
+### ⚠️ self-hosted 러너가 필요한 이유
+
+HIRA 게시판이 GitHub 호스트 러너(클라우드 IP 대역)의 요청을 `400 Bad Request`로 차단합니다.
+그래서 이 워크플로는 `runs-on: self-hosted`로 설정되어 있고, PC 한 대를 러너로 등록해둬야
+매달 자동 갱신이 동작합니다.
+
+등록 방법: GitHub 저장소 **Settings → Actions → Runners → New self-hosted runner**에서
+Windows용 다운로드/등록 명령을 그대로 실행하면 되는데, 관리자 권한 PowerShell에서
+`--runasservice` 옵션을 붙여 Windows 서비스로 설치해야 로그아웃/재부팅 후에도 계속 동작합니다.
+
+```powershell
+.\config.cmd --unattended --url "https://github.com/bioinform25/DUR_application" --token "<발급받은 토큰>" --runasservice --name "원하는-이름"
+```
+
+주의할 점: 이 서비스는 `NT AUTHORITY\NETWORK SERVICE` 같은 시스템 계정으로 실행되어
+**사용자 계정 PATH가 아니라 시스템 전체(Machine) PATH만 봅니다.** Python이나 Git Bash가
+사용자 프로필 아래(`%LOCALAPPDATA%` 등)에만 설치되어 있다면, 관리자 권한으로
+시스템 PATH에도 추가해줘야 `python`/`bash` 명령을 찾을 수 있습니다:
+
+```powershell
+$machinePath = [Environment]::GetEnvironmentVariable('Path','Machine')
+$newPath = $machinePath + ';C:\Program Files\Git\bin;<python.exe가 있는 폴더>'
+[Environment]::SetEnvironmentVariable('Path', $newPath, 'Machine')
+Restart-Service "<러너 서비스 이름>"
+```
+
 ## GitHub Pages로 배포하기
 
 1. GitHub 저장소 Settings → Pages
@@ -82,10 +107,11 @@ python scripts/fetch_dur_rules.py      # data/dur_rules.json 생성 (DUR_API_KEY
 - **알약 사진 식별 기능은 포함하지 않았습니다.** 대신 검색창 아래에 약학정보원 알약 식별
   서비스로 이동하는 링크를 두었습니다. 실제 식별 기능을 넣으려면 알약 이미지 DB와 이미지
   인식 모델이 필요한 별도 프로젝트가 됩니다.
-- **킴스온라인·드럭인포 링크는 정확한 딥링크를 확인하지 못해** 네이버 사이트 지정 검색
-  (`site:druginfo.co.kr`, `site:kimsonline.co.kr`)으로 대체했습니다. 약학정보원(health.kr)은
-  검색어를 넘기는 딥링크를 확인했습니다.
-- **DUR API 연동은 위에 설명한 대로 최종 검증이 필요합니다.**
+- **외부 링크는 약학정보원(health.kr)만 사용합니다.** 킴스온라인·드럭인포는 안정적인 딥링크를
+  확인하지 못해 제외했습니다. health.kr 검색은 급여목록표의 전체 상품명(용량+괄호 성분명 포함)
+  그대로 넘기면 실패하는 경우가 많아(예: "프라닥사캡슐150밀리그램(다비가트란...)" 검색 실패),
+  `parse_price_list.py`의 `make_search_name()`이 괄호와 용량 표기를 제거한 핵심 상품명
+  (예: "프라닥사캡슐")만 뽑아 검색어로 사용합니다.
 - **복합제(2성분 이상) 매칭**은 성분명을 쉼표 기준으로 분리해 처리하지만, 3성분 이상 복합제나
   일부 표기 변형은 놓칠 수 있습니다.
 - 향후 모바일 앱화는 지금의 순수 HTML/CSS/JS 구조를 그대로 [Capacitor](https://capacitorjs.com/)로

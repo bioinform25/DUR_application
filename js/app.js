@@ -51,13 +51,15 @@
 
     for (const key in ingredient_key_index) {
       const productCodes = ingredient_key_index[key];
+      const prettyKey = prettifyKey(key);
       list.push({
         kind: "ingredient",
         key,
-        label: prettifyKey(key),
+        label: prettyKey,
         sub: `성분명 · 관련 제품 ${productCodes.length}개`,
         searchText: key,
         ingredientKeys: [key],
+        healthSearchName: prettyKey,
       });
     }
 
@@ -69,6 +71,7 @@
         sub: `${p.company} · ${p.ingredient_name_display}`,
         searchText: (p.product_name_display + " " + p.ingredient_name_display).toLowerCase(),
         ingredientKeys: p.ingredient_keys,
+        healthSearchName: p.search_name || p.product_name_display,
       });
     }
     state.suggestions = list;
@@ -191,6 +194,7 @@
       label: item.label,
       sub: item.sub,
       ingredientKeys: item.ingredientKeys,
+      healthSearchName: item.healthSearchName || item.label,
     });
     renderBasket();
     renderResults();
@@ -208,13 +212,9 @@
     renderResults();
   });
 
-  function externalLinks(label) {
-    const q = encodeURIComponent(label);
-    return {
-      health: `https://www.health.kr/searchDrug/search_total_result.asp?search_word=${q}&search_flag=all`,
-      druginfo: `https://search.naver.com/search.naver?query=${q}+site:druginfo.co.kr`,
-      kims: `https://search.naver.com/search.naver?query=${q}+site:kimsonline.co.kr`,
-    };
+  function healthKrLink(searchName) {
+    const q = encodeURIComponent(searchName);
+    return `https://www.health.kr/searchDrug/search_total_result.asp?search_word=${q}&search_flag=all`;
   }
 
   function renderBasket() {
@@ -223,7 +223,7 @@
 
     el.basketList.innerHTML = state.basket
       .map((b) => {
-        const links = externalLinks(b.label);
+        const healthLink = healthKrLink(b.healthSearchName);
         return `
         <li class="basket-item">
           <div class="info">
@@ -231,9 +231,7 @@
             <div class="meta">${escapeHtml(b.sub)}</div>
           </div>
           <div class="actions">
-            <a class="link-btn" title="약학정보원에서 상세정보 보기" href="${links.health}" target="_blank" rel="noopener">약</a>
-            <a class="link-btn" title="드럭인포 검색" href="${links.druginfo}" target="_blank" rel="noopener">드</a>
-            <a class="link-btn" title="킴스온라인 검색" href="${links.kims}" target="_blank" rel="noopener">킴</a>
+            <a class="link-btn health-link" title="약학정보원에서 상세정보 보기" href="${healthLink}" target="_blank" rel="noopener">약학정보원</a>
             <button class="remove-btn" title="바구니에서 빼기" data-uid="${b.uid}">×</button>
           </div>
         </li>`;
@@ -259,6 +257,16 @@
       caution: "병용주의",
       elderly: "노인주의 등",
       other: "기타 주의",
+    }[bucket];
+  }
+
+  // 일반인 모드에서는 의학적 세부사항 대신, 심각도에 맞는 상담 권고 문구를 강조해서 보여준다.
+  function severityLayAdvice(bucket) {
+    return {
+      contraindicated: "함께 복용하면 안 되는 조합(병용금기)입니다. 지금 복용 중이라면 반드시 처방한 의사 또는 약사와 상담하세요.",
+      caution: "함께 복용 시 주의가 필요한 조합입니다. 복용 전 약사·의사와 상담하는 것이 안전합니다.",
+      elderly: "고령 환자는 특히 주의가 필요한 약입니다. 복용 여부를 의사·약사와 상의하세요.",
+      other: "등록된 주의사항이 있습니다. 약사·의사와 상담하세요.",
     }[bucket];
   }
 
@@ -322,27 +330,34 @@
         const bucket = severityBucket(m.rule.severity);
         const names = m.items.map((it) => it.label).join(" + ");
         const refItems = (m.rule.reference_items || []).filter(Boolean).join(", ");
+        const ingredientKeyLabel = (m.rule.ingredient_keys || []).map(prettifyKey).join(" ↔ ");
+        const pairCount = m.rule.product_pair_count;
+
         return `
         <div class="result-card ${bucket}">
           <span class="result-badge">${severityLabel(bucket)}</span>
           <p class="result-title">${escapeHtml(names)}</p>
-          <p class="result-desc lay-only">${escapeHtml(shortDescription(m.rule))}</p>
-          <p class="result-desc expert-only">${escapeHtml(m.rule.description || "")}</p>
-          <p class="result-manage">${escapeHtml(m.rule.management || "특별한 관리 지침이 등록되어 있지 않습니다. 약사·의사와 상의하세요.")}</p>
-          <p class="result-meta expert-only">
-            분류: ${escapeHtml(m.rule.category || "")} · 규칙 ID: ${escapeHtml(m.rule.id || "")}
-            ${refItems ? " · 참고 품목: " + escapeHtml(refItems) : ""}
-          </p>
+
+          <div class="lay-only">
+            ${m.rule.description ? `<p class="result-desc">${escapeHtml(m.rule.description)}</p>` : ""}
+            <p class="result-advice">${escapeHtml(severityLayAdvice(bucket))}</p>
+          </div>
+
+          <div class="expert-only">
+            <p class="result-desc">${escapeHtml(m.rule.description || "등록된 상세 설명 없음")}</p>
+            ${m.rule.management ? `<p class="result-manage">비고: ${escapeHtml(m.rule.management)}</p>` : ""}
+            <p class="result-meta">
+              분류: ${escapeHtml(m.rule.category || "")} · 규칙 ID: ${escapeHtml(m.rule.id || "")}<br>
+              성분 매칭: ${escapeHtml(ingredientKeyLabel)}
+              ${pairCount ? ` · 등록된 실제 제품 조합: ${pairCount.toLocaleString()}건` : ""}
+              ${refItems ? "<br>참고 품목 예시: " + escapeHtml(refItems) : ""}
+            </p>
+          </div>
         </div>`;
       })
       .join("");
 
     el.results.innerHTML = summary + cards;
-  }
-
-  function shortDescription(rule) {
-    const d = rule.description || "";
-    return d.length > 70 ? d.slice(0, 70) + "…" : d;
   }
 
   function escapeHtml(str) {

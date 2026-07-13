@@ -66,6 +66,12 @@ EXPECTED_HEADERS = [
 
 # 제품명 뒤에 붙는 "_(규격)" 표시부를 잘라 사람이 읽기 쉬운 이름을 만든다.
 DISPLAY_NAME_RE = re.compile(r"^(.*?)_\([^()]*\)\s*$")
+# 약학정보원 등 외부 사이트는 "프라닥사캡슐150mg"처럼 용량을 영문 약어로 붙이는 반면
+# 급여목록표는 "프라닥사캡슐150밀리그램(성분명)"처럼 한글 단위+괄호를 붙인다. 두 표기가
+# 달라 그대로 검색하면 실패하는 경우가 많아, 괄호와 용량 숫자를 모두 제거한 핵심
+# 상품명만 남겨 외부 검색용으로 쓴다(용량이 달라도 상품 계열은 찾을 수 있게).
+PAREN_GROUP_RE = re.compile(r"\([^()]*\)")
+LEADING_NAME_RE = re.compile(r"^([^\d]+)")
 # 성분명에서 앞쪽 화학명만 남기고 뒤의 용량 표기를 잘라낸다. 예: "chloral hydrate   9.5g(0.1g/mL)" -> "chloral hydrate"
 INGREDIENT_DISPLAY_RE = re.compile(r"^([A-Za-z0-9,\-\'\.\(\) ]+?)\s{2,}")
 
@@ -75,6 +81,17 @@ def strip_display_name(name: str) -> str:
         return name
     m = DISPLAY_NAME_RE.match(name)
     return m.group(1) if m else name
+
+
+def make_search_name(display_name: str) -> str:
+    """외부 사이트(약학정보원 등) 검색용 핵심 상품명 추출.
+    괄호(부가 성분명)를 지우고, 처음 나오는 숫자(=용량 표기 시작점) 앞까지만 남긴다."""
+    if not display_name:
+        return display_name
+    name = PAREN_GROUP_RE.sub("", display_name).strip()
+    m = LEADING_NAME_RE.match(name)
+    core = m.group(1).strip() if m else name
+    return core or name
 
 
 def strip_ingredient_display(name: str) -> str:
@@ -132,10 +149,12 @@ def main() -> int:
         # 복합제 대응: "성분A 0.1g, 성분B 75mg" -> ["성분a", "성분b"] (DDI 매칭용 키)
         ingredient_keys = split_ingredient_keys(str(ingredient_name))
 
+        display_name = strip_display_name(str(product_name))
         product = {
             "product_code": str(product_code),
             "product_name": str(product_name),
-            "product_name_display": strip_display_name(str(product_name)),
+            "product_name_display": display_name,
+            "search_name": make_search_name(display_name),
             "company": record.get("업체명") or "",
             "route": record.get("투여") or "",
             "spec": str(record.get("규격") or ""),
