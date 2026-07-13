@@ -28,6 +28,8 @@
     voiceSearchBtn: document.getElementById("voice-search-btn"),
     printBtn: document.getElementById("print-btn"),
     printDate: document.getElementById("print-date"),
+    reminderList: document.getElementById("reminder-list"),
+    reminderEmptyMsg: document.getElementById("reminder-empty-msg"),
   };
 
   // ---------- 데이터 로딩 ----------
@@ -269,6 +271,7 @@
           </div>
           <div class="actions">
             <a class="link-btn health-link" title="약학정보원에서 상세정보 보기" href="${healthLink}" target="_blank" rel="noopener">약학정보원</a>
+            <button class="link-btn reminder-add-btn no-print" title="복약 알림 등록" data-label="${escapeHtml(b.label)}">⏰</button>
             <button class="remove-btn" title="바구니에서 빼기" data-uid="${b.uid}">×</button>
           </div>
         </li>`;
@@ -277,6 +280,9 @@
 
     el.basketList.querySelectorAll(".remove-btn").forEach((btn) => {
       btn.addEventListener("click", () => removeFromBasket(btn.getAttribute("data-uid")));
+    });
+    el.basketList.querySelectorAll(".reminder-add-btn").forEach((btn) => {
+      btn.addEventListener("click", () => addReminder(btn.getAttribute("data-label")));
     });
   }
 
@@ -405,6 +411,122 @@
       .replace(/"/g, "&quot;");
   }
 
+  // ---------- 복약 알림 ----------
+  // 이 브라우저 탭이 열려 있을 때만 알림이 울린다(백그라운드 푸시 서버가 없는
+  // 정적 사이트의 한계). 그래도 localStorage에 저장해두면 다시 열었을 때 유지된다.
+  const REMINDER_KEY = "dur_reminders";
+  let reminders = loadReminders();
+  const remindersFiredToday = new Set(); // `${reminderId}_${time}_${YYYY-MM-DD}` 중복 알림 방지
+
+  function loadReminders() {
+    try {
+      const raw = localStorage.getItem(REMINDER_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveReminders() {
+    localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
+  }
+
+  function addReminder(label) {
+    if (reminders.some((r) => r.label === label)) {
+      alert("이미 등록된 약입니다. 아래 목록에서 시간을 추가해주세요.");
+      return;
+    }
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+    reminders.push({ id: "r" + Date.now(), label, times: [] });
+    saveReminders();
+    renderReminders();
+  }
+
+  function removeReminder(id) {
+    reminders = reminders.filter((r) => r.id !== id);
+    saveReminders();
+    renderReminders();
+  }
+
+  function addReminderTime(id, time) {
+    const reminder = reminders.find((r) => r.id === id);
+    if (!reminder || !time || reminder.times.includes(time)) return;
+    reminder.times.push(time);
+    reminder.times.sort();
+    saveReminders();
+    renderReminders();
+  }
+
+  function removeReminderTime(id, time) {
+    const reminder = reminders.find((r) => r.id === id);
+    if (!reminder) return;
+    reminder.times = reminder.times.filter((t) => t !== time);
+    saveReminders();
+    renderReminders();
+  }
+
+  function renderReminders() {
+    el.reminderEmptyMsg.style.display = reminders.length ? "none" : "block";
+    el.reminderList.innerHTML = reminders
+      .map((r) => {
+        const chips = r.times
+          .map(
+            (t) => `<span class="time-chip">${t} <button class="time-remove-btn" data-id="${r.id}" data-time="${t}" aria-label="시간 삭제">×</button></span>`
+          )
+          .join("");
+        return `
+        <li class="reminder-item">
+          <div class="info">
+            <div class="name">${escapeHtml(r.label)}</div>
+            <div class="time-chips">${chips || '<span class="basket-empty" style="padding:0;">아직 시간이 없습니다</span>'}</div>
+            <div class="time-add-row">
+              <input type="time" class="time-input" id="time-input-${r.id}" />
+              <button class="clear-btn time-add-btn" data-id="${r.id}">+ 시간 추가</button>
+            </div>
+          </div>
+          <button class="remove-btn" title="알림 삭제" data-id="${r.id}">×</button>
+        </li>`;
+      })
+      .join("");
+
+    el.reminderList.querySelectorAll(".time-remove-btn").forEach((btn) => {
+      btn.addEventListener("click", () => removeReminderTime(btn.getAttribute("data-id"), btn.getAttribute("data-time")));
+    });
+    el.reminderList.querySelectorAll(".time-add-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-id");
+        const input = document.getElementById(`time-input-${id}`);
+        if (input.value) addReminderTime(id, input.value);
+      });
+    });
+    el.reminderList.querySelectorAll(".reminder-item > .remove-btn").forEach((btn) => {
+      btn.addEventListener("click", () => removeReminder(btn.getAttribute("data-id")));
+    });
+  }
+
+  function checkReminders() {
+    if (!reminders.length) return;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    const currentTime = `${hh}:${mm}`;
+    const today = now.toISOString().slice(0, 10);
+
+    for (const r of reminders) {
+      if (!r.times.includes(currentTime)) continue;
+      const fireKey = `${r.id}_${currentTime}_${today}`;
+      if (remindersFiredToday.has(fireKey)) continue;
+      remindersFiredToday.add(fireKey);
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification("복약 알림", { body: `${r.label} 복용 시간입니다.`, icon: "icons/icon-192.png" });
+      }
+    }
+  }
+
+  setInterval(checkReminders, 20000);
+
   // ---------- 모드 전환 ----------
   el.modeLayBtn.addEventListener("click", () => setMode("lay"));
   el.modeExpertBtn.addEventListener("click", () => setMode("expert"));
@@ -499,6 +621,7 @@
   applyFontStep();
 
   renderBasket();
+  renderReminders();
   loadData().catch((err) => {
     console.error(err);
     el.results.innerHTML = `<p class="basket-empty">데이터를 불러오지 못했습니다. data/drugs.json, data/dur_rules.json 파일이 있는지 확인하세요.<br>(${escapeHtml(err.message)})</p>`;

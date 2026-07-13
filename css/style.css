@@ -286,6 +286,67 @@ header.top p.subtitle {
 
 .basket-item .actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
+/* ---------- 복약 알림 ---------- */
+.reminder-hint {
+  font-size: calc(14px * var(--font-zoom, 1));
+  color: var(--text-sub);
+  margin: 0 0 12px;
+}
+
+#reminder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.reminder-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  background: #fbfcff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.reminder-item .name { font-size: calc(17px * var(--font-zoom, 1)); font-weight: 700; margin-bottom: 6px; }
+
+.time-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+
+.time-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  font-size: calc(14px * var(--font-zoom, 1));
+  font-weight: 700;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+}
+
+.time-remove-btn {
+  border: none;
+  background: transparent;
+  color: var(--primary-dark);
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.time-add-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.time-input {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: calc(14px * var(--font-zoom, 1));
+}
+
 .link-btn {
   display: inline-flex;
   align-items: center;
