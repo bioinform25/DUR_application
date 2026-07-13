@@ -320,6 +320,7 @@
 
   function saveBasket() {
     localStorage.setItem(BASKET_KEY, JSON.stringify(state.basket));
+    if (window.FamilySync) window.FamilySync.pushBasket(state.basket);
   }
 
   function loadBasket() {
@@ -682,6 +683,7 @@
 
   function saveReminders() {
     localStorage.setItem(REMINDER_KEY, JSON.stringify(reminders));
+    if (window.FamilySync) window.FamilySync.pushReminders(reminders);
   }
 
   function addReminder(label) {
@@ -1013,6 +1015,25 @@
       el.ocrPanel.hidden = true;
     };
   }
+
+  // ---------- 가족 공유 연동 ----------
+  // family-sync.js가 Firestore에서 실시간으로 받은 데이터를 여기서 반영한다.
+  // saveBasket()/saveReminders()는 family-sync.js의 applyingRemote 가드 덕분에
+  // 이 반영을 다시 Firestore로 재전송하지 않는다.
+  window.addEventListener("family-data-updated", (e) => {
+    const data = e.detail || {};
+    if (Array.isArray(data.basket)) {
+      state.basket = data.basket;
+      saveBasket();
+      renderBasket();
+      renderResults();
+    }
+    if (Array.isArray(data.reminders)) {
+      reminders = data.reminders;
+      saveReminders();
+      renderReminders();
+    }
+  });
 
   // ---------- 초기화 ----------
   const savedMode = localStorage.getItem("dur_mode");

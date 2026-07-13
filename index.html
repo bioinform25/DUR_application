@@ -98,6 +98,30 @@
     <p class="basket-empty" id="reminder-empty-msg">등록된 복약 알림이 없습니다.</p>
   </section>
 
+  <section class="card no-print" id="family-share-card" hidden>
+    <h2>5. 가족과 공유하기</h2>
+    <div id="family-signed-out">
+      <p class="reminder-hint">구글 계정으로 로그인하면 가족과 바구니·복약알림을 실시간으로 공유할 수 있습니다.</p>
+      <button type="button" id="family-signin-btn" class="print-btn">Google로 로그인</button>
+    </div>
+    <div id="family-signed-in" hidden>
+      <p id="family-status" class="reminder-hint"></p>
+      <div id="family-no-group">
+        <button type="button" id="family-create-btn" class="print-btn">새 가족 그룹 만들기</button>
+        <div class="family-join-row">
+          <input type="text" id="family-join-code" placeholder="초대 코드 6자리" maxlength="6" />
+          <button type="button" id="family-join-btn" class="clear-btn">참여하기</button>
+        </div>
+      </div>
+      <div id="family-group-info" hidden>
+        <p>가족 코드: <strong id="family-code-display"></strong><br />
+          <span class="reminder-hint">이 코드를 가족에게 알려주면 같은 바구니·알림을 공유할 수 있습니다.</span></p>
+        <button type="button" id="family-leave-btn" class="clear-btn">그룹 나가기</button>
+      </div>
+      <button type="button" id="family-signout-btn" class="clear-btn">로그아웃</button>
+    </div>
+  </section>
+
   <p class="disclaimer">
     본 서비스는 건강보험심사평가원 약제급여목록표와 공공 DUR 데이터를 바탕으로 한 참고용 프로토타입이며,
     의료진·약사의 처방 및 상담을 대체하지 않습니다. 실제 복약 결정은 반드시 의사 또는 약사와 상의하세요.
@@ -108,8 +132,13 @@
 
 <!-- 약봉투 사진 OCR용. 이 라이브러리 로딩이 실패해도(오프라인 등) 다른 기능에는 영향 없음 -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js" defer></script>
+<!-- 가족 공유용(선택 기능). js/family-sync.js에 설정값이 없으면 조용히 비활성화된다 -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js" defer></script>
 <script src="js/normalize.js"></script>
 <script src="js/food_interactions.js"></script>
+<script src="js/family-sync.js" defer></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -471,6 +471,24 @@ header.top p.subtitle {
   font-size: calc(14px * var(--font-zoom, 1));
 }
 
+/* ---------- 가족 공유 ---------- */
+.family-join-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+#family-join-code {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: calc(15px * var(--font-zoom, 1));
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  width: 140px;
+}
+#family-code-display {
+  font-size: calc(20px * var(--font-zoom, 1));
+  letter-spacing: 0.1em;
+  color: var(--primary-dark);
+}
+#family-signed-in > .clear-btn { margin-top: 12px; }
+
 .link-btn {
   display: inline-flex;
   align-items: center;
