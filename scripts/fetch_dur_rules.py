@@ -268,7 +268,52 @@ def load_mock() -> dict:
     return json.loads(MOCK_SEED.read_text(encoding="utf-8"))
 
 
+def compute_changelog(old_out: dict, rules: list, duplicate_groups: dict) -> dict:
+    """이전 실행 결과와 비교해 카테고리별 건수 변화를 사람이 읽을 수 있는 목록으로
+    만든다. 처음 실행하거나(예: 새 카테고리를 막 추가한 경우) 이전 데이터가 없으면
+    changes가 비어있을 수 있다 - 그 자체로 '이번이 첫 기준점'이라는 뜻이라 문제 없다."""
+    old_rules = (old_out or {}).get("rules", [])
+
+    def category_counts(rule_list):
+        counts: dict = {}
+        for r in rule_list:
+            cat = r.get("category", "기타")
+            counts[cat] = counts.get(cat, 0) + 1
+        return counts
+
+    old_counts = category_counts(old_rules)
+    new_counts = category_counts(rules)
+
+    changes = []
+    for cat in sorted(set(old_counts) | set(new_counts)):
+        old_c = old_counts.get(cat, 0)
+        new_c = new_counts.get(cat, 0)
+        if old_c != new_c:
+            diff = new_c - old_c
+            sign = "+" if diff > 0 else ""
+            changes.append(f"{cat} {sign}{diff}건 ({old_c}→{new_c})")
+
+    old_dup = (old_out or {}).get("duplicate_group_count", 0)
+    new_dup = len(duplicate_groups)
+    if old_dup != new_dup:
+        diff = new_dup - old_dup
+        sign = "+" if diff > 0 else ""
+        changes.append(f"효능군중복 그룹 {sign}{diff}개 ({old_dup}→{new_dup})")
+
+    return {
+        "previous_updated": (old_out or {}).get("updated"),
+        "changes": changes,
+    }
+
+
 def main() -> int:
+    old_out = None
+    if OUT_FILE.exists():
+        try:
+            old_out = json.loads(OUT_FILE.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            old_out = None
+
     service_key = get_api_key()
 
     if not service_key:
@@ -307,6 +352,8 @@ def main() -> int:
             rules = taboo_rules + elderly_rules + age_rules + duration_rules + dose_rules
             source = "data.go.kr DUR품목정보 API (병용금기+노인주의+특정연령대금기+투여기간주의+용량주의+효능군중복주의)"
 
+    changelog = compute_changelog(old_out, rules, duplicate_groups)
+
     out = {
         "updated": date.today().isoformat(),
         "source": source,
@@ -314,6 +361,7 @@ def main() -> int:
         "rules": rules,
         "duplicate_groups": duplicate_groups,
         "duplicate_group_count": len(duplicate_groups),
+        "changelog": changelog,
     }
 
     DATA_DIR.mkdir(parents=True, exist_ok=True)

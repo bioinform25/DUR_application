@@ -24,6 +24,7 @@
     modeLayBtn: document.getElementById("mode-lay-btn"),
     modeExpertBtn: document.getElementById("mode-expert-btn"),
     dataUpdated: document.getElementById("data-updated"),
+    changelogText: document.getElementById("changelog-text"),
     themeToggleBtn: document.getElementById("theme-toggle-btn"),
     themeToggleLabel: document.getElementById("theme-toggle-label"),
     fontDecreaseBtn: document.getElementById("font-decrease-btn"),
@@ -80,6 +81,15 @@
     if (!d) return;
     el.dataUpdated.textContent =
       ` (약제급여목록표 기준일: ${d.updated}, 수록 제품 ${d.product_count.toLocaleString()}건)`;
+
+    const changelog = state.rulesData && state.rulesData.changelog;
+    if (changelog && changelog.changes && changelog.changes.length) {
+      el.changelogText.hidden = false;
+      el.changelogText.textContent =
+        `📋 지난 갱신(${changelog.previous_updated || "이전"}) 대비 변경: ${changelog.changes.join(", ")}`;
+    } else {
+      el.changelogText.hidden = true;
+    }
   }
 
   function buildSuggestionIndex() {

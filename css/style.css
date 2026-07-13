@@ -601,6 +601,15 @@ header.top p.subtitle {
   border-top: 1px solid var(--border);
 }
 
+.changelog {
+  font-size: calc(13px * var(--font-zoom, 1));
+  color: var(--primary-dark);
+  background: var(--primary-light);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-top: 10px;
+}
+
 .data-meta {
   font-size: calc(13px * var(--font-zoom, 1));
   color: var(--text-sub);
