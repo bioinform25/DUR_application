@@ -140,6 +140,40 @@
     items.forEach((it, idx) => it.classList.toggle("highlight", idx === state.highlightIndex));
   }
 
+  // 표준 Levenshtein 편집거리. 짧은 문자열끼리만 비교하므로 성능 부담은 작다.
+  function levenshtein(a, b) {
+    const m = a.length;
+    const n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+    let prev = new Array(n + 1);
+    let curr = new Array(n + 1);
+    for (let j = 0; j <= n; j++) prev[j] = j;
+    for (let i = 1; i <= m; i++) {
+      curr[0] = i;
+      for (let j = 1; j <= n; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+      }
+      [prev, curr] = [curr, prev];
+    }
+    return prev[n];
+  }
+
+  // label 안에서 query 길이만큼의 윈도우를 옮겨가며 가장 가까운 편집거리를 찾는다.
+  // (예: "타이레늘"(오타) vs "타이레놀정500밀리그램..." 같은 긴 상품명 안에서도 앞부분만 비교)
+  function fuzzyMinDistance(label, query) {
+    const qLen = query.length;
+    if (label.length <= qLen) return levenshtein(label, query);
+    let min = Infinity;
+    for (let i = 0; i <= label.length - qLen; i++) {
+      const dist = levenshtein(label.slice(i, i + qLen), query);
+      if (dist < min) min = dist;
+      if (min === 0) break;
+    }
+    return min;
+  }
+
   function runSearch() {
     const q = el.searchInput.value.trim().toLowerCase();
     if (!q || !state.suggestions.length) {
@@ -155,9 +189,26 @@
       } else if (s.searchText.includes(q)) {
         contains.push(s);
       }
-      if (starts.length >= 20) break;
     }
-    const matches = starts.concat(contains).slice(0, 20);
+
+    let matches = starts.concat(contains);
+
+    // 정확/부분일치가 거의 없으면 오타를 감안한 유사 검색을 추가로 시도한다.
+    // (매 입력마다 26,000여 건을 편집거리로 훑는 건 낭비라 결과가 부족할 때만 실행)
+    if (matches.length < 5 && q.length >= 2) {
+      const threshold = q.length <= 3 ? 1 : q.length <= 6 ? 2 : 3;
+      const already = new Set(matches);
+      const fuzzy = [];
+      for (const s of state.suggestions) {
+        if (already.has(s)) continue;
+        const dist = fuzzyMinDistance(s.label.toLowerCase(), q);
+        if (dist <= threshold) fuzzy.push({ s, dist });
+      }
+      fuzzy.sort((a, b) => a.dist - b.dist);
+      matches = matches.concat(fuzzy.map((f) => f.s));
+    }
+
+    matches = matches.slice(0, 20);
     state.currentMatches = matches;
     state.highlightIndex = -1;
     renderSuggestions(matches);
@@ -203,6 +254,21 @@
   }
 
   // ---------- 바구니 ----------
+  const BASKET_KEY = "dur_basket";
+
+  function saveBasket() {
+    localStorage.setItem(BASKET_KEY, JSON.stringify(state.basket));
+  }
+
+  function loadBasket() {
+    try {
+      const raw = localStorage.getItem(BASKET_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
   function addToBasket(item) {
     const uid = item.kind + ":" + (item.kind === "product" ? item.code : item.key);
     if (state.basket.some((b) => b.uid === uid)) return;
@@ -216,18 +282,21 @@
       ingredientKeys: item.ingredientKeys,
       healthSearchName: item.healthSearchName || item.label,
     });
+    saveBasket();
     renderBasket();
     renderResults();
   }
 
   function removeFromBasket(uid) {
     state.basket = state.basket.filter((b) => b.uid !== uid);
+    saveBasket();
     renderBasket();
     renderResults();
   }
 
   el.clearBasketBtn.addEventListener("click", () => {
     state.basket = [];
+    saveBasket();
     renderBasket();
     renderResults();
   });
@@ -725,6 +794,7 @@
   }
   applyFontStep();
 
+  state.basket = loadBasket();
   renderBasket();
   renderReminders();
   loadData().catch((err) => {
