@@ -33,6 +33,8 @@
     printDate: document.getElementById("print-date"),
     reminderList: document.getElementById("reminder-list"),
     reminderEmptyMsg: document.getElementById("reminder-empty-msg"),
+    todayScheduleWrap: document.getElementById("today-schedule-wrap"),
+    todayScheduleList: document.getElementById("today-schedule-list"),
     ocrBtn: document.getElementById("ocr-btn"),
     ocrFileInput: document.getElementById("ocr-file-input"),
     ocrPanel: document.getElementById("ocr-panel"),
@@ -117,11 +119,43 @@
     return key.charAt(0).toUpperCase() + key.slice(1);
   }
 
+  // ---------- 검색 히스토리 ----------
+  const SEARCH_HISTORY_KEY = "dur_search_history";
+  const MAX_HISTORY = 8;
+  let searchHistory = loadSearchHistory();
+
+  function loadSearchHistory() {
+    try {
+      const raw = localStorage.getItem(SEARCH_HISTORY_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function addToSearchHistory(item, uid) {
+    searchHistory = searchHistory.filter((h) => h.uid !== uid);
+    searchHistory.unshift({ ...item, uid });
+    searchHistory = searchHistory.slice(0, MAX_HISTORY);
+    localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(searchHistory));
+  }
+
+  function showSearchHistory() {
+    if (!searchHistory.length) return;
+    state.currentMatches = searchHistory;
+    state.highlightIndex = -1;
+    renderSuggestions(searchHistory, true);
+  }
+
   // ---------- 검색 자동완성 ----------
   let searchDebounce = null;
   el.searchInput.addEventListener("input", () => {
     clearTimeout(searchDebounce);
     searchDebounce = setTimeout(runSearch, 120);
+  });
+
+  el.searchInput.addEventListener("focus", () => {
+    if (!el.searchInput.value.trim()) showSearchHistory();
   });
 
   el.searchInput.addEventListener("keydown", (e) => {
@@ -229,17 +263,20 @@
     renderSuggestions(matches);
   }
 
-  function renderSuggestions(matches) {
+  function renderSuggestions(matches, isHistory) {
     if (!matches.length) {
       el.suggestions.innerHTML = '<div class="suggestion-empty">일치하는 약이 없습니다. 다른 이름으로 검색해보세요.</div>';
       el.suggestions.classList.add("open");
       return;
     }
-    el.suggestions.innerHTML = matches
-      .map((m, idx) => {
-        const tagLabel = m.kind === "product" ? "상품명" : "성분명";
-        const tagClass = m.kind === "product" ? "product" : "ingredient";
-        return `
+    const header = isHistory ? '<div class="suggestion-history-header">최근 담은 약</div>' : "";
+    el.suggestions.innerHTML =
+      header +
+      matches
+        .map((m, idx) => {
+          const tagLabel = m.kind === "product" ? "상품명" : "성분명";
+          const tagClass = m.kind === "product" ? "product" : "ingredient";
+          return `
         <div class="suggestion-item" data-idx="${idx}">
           <div class="suggestion-main">
             <span class="suggestion-name">${escapeHtml(m.label)}</span>
@@ -247,8 +284,8 @@
           </div>
           <span class="tag ${tagClass}">${tagLabel}</span>
         </div>`;
-      })
-      .join("");
+        })
+        .join("");
     el.suggestions.classList.add("open");
 
     el.suggestions.querySelectorAll(".suggestion-item").forEach((node) => {
@@ -286,6 +323,7 @@
 
   function addToBasket(item) {
     const uid = item.kind + ":" + (item.kind === "product" ? item.code : item.key);
+    addToSearchHistory(item, uid);
     if (state.basket.some((b) => b.uid === uid)) return;
     state.basket.push({
       uid,
@@ -709,6 +747,37 @@
     el.reminderList.querySelectorAll(".reminder-item > .remove-btn").forEach((btn) => {
       btn.addEventListener("click", () => removeReminder(btn.getAttribute("data-id")));
     });
+
+    renderTodaySchedule();
+  }
+
+  // 등록된 모든 알림 시간을 하루 일정표처럼 시간순으로 모아 보여준다.
+  // 이미 지난 시간은 흐리게 표시해 "먹었는지 아닌지" 한눈에 훑을 수 있게 한다.
+  function renderTodaySchedule() {
+    const flat = [];
+    for (const r of reminders) {
+      for (const t of r.times) flat.push({ time: t, label: r.label });
+    }
+    if (!flat.length) {
+      el.todayScheduleWrap.hidden = true;
+      return;
+    }
+    flat.sort((a, b) => a.time.localeCompare(b.time));
+
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+
+    el.todayScheduleWrap.hidden = false;
+    el.todayScheduleList.innerHTML = flat
+      .map((entry) => {
+        const isPast = entry.time <= currentTime;
+        return `
+        <li class="today-schedule-item ${isPast ? "past" : "upcoming"}">
+          <span class="today-schedule-time">${isPast ? "✅" : "⏰"} ${entry.time}</span>
+          <span class="today-schedule-name">${escapeHtml(entry.label)}</span>
+        </li>`;
+      })
+      .join("");
   }
 
   function checkReminders() {

@@ -332,6 +332,15 @@ header.top p.subtitle {
 
 .suggestion-empty { padding: 16px; color: var(--text-sub); font-size: calc(15px * var(--font-zoom, 1)); }
 
+.suggestion-history-header {
+  padding: 10px 16px 4px;
+  font-size: calc(12px * var(--font-zoom, 1));
+  font-weight: 800;
+  color: var(--text-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 /* ---------- 바구니 ---------- */
 #basket-list {
   list-style: none;
@@ -369,6 +378,39 @@ header.top p.subtitle {
 .basket-item .actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
 /* ---------- 복약 알림 ---------- */
+.today-schedule-title {
+  font-size: calc(16px * var(--font-zoom, 1));
+  margin: 0 0 8px;
+  color: var(--primary-dark);
+}
+
+#today-schedule-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.today-schedule-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--primary-light);
+}
+.today-schedule-item.past { opacity: 0.5; }
+.today-schedule-time {
+  font-weight: 800;
+  font-size: calc(15px * var(--font-zoom, 1));
+  flex-shrink: 0;
+}
+.today-schedule-name {
+  font-size: calc(15px * var(--font-zoom, 1));
+}
+
 .reminder-hint {
   font-size: calc(14px * var(--font-zoom, 1));
   color: var(--text-sub);
