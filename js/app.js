@@ -23,6 +23,9 @@
     modeLayBtn: document.getElementById("mode-lay-btn"),
     modeExpertBtn: document.getElementById("mode-expert-btn"),
     dataUpdated: document.getElementById("data-updated"),
+    fontDecreaseBtn: document.getElementById("font-decrease-btn"),
+    fontIncreaseBtn: document.getElementById("font-increase-btn"),
+    voiceSearchBtn: document.getElementById("voice-search-btn"),
   };
 
   // ---------- 데이터 로딩 ----------
@@ -413,9 +416,74 @@
     localStorage.setItem("dur_mode", mode);
   }
 
+  // ---------- 글자 크기 조절 ----------
+  const FONT_STEPS = [0.9, 1, 1.15, 1.3];
+  let fontStepIndex = 1;
+
+  function applyFontStep() {
+    document.documentElement.style.setProperty("--font-zoom", FONT_STEPS[fontStepIndex]);
+    localStorage.setItem("dur_font_step", String(fontStepIndex));
+  }
+
+  el.fontIncreaseBtn.addEventListener("click", () => {
+    fontStepIndex = Math.min(fontStepIndex + 1, FONT_STEPS.length - 1);
+    applyFontStep();
+  });
+  el.fontDecreaseBtn.addEventListener("click", () => {
+    fontStepIndex = Math.max(fontStepIndex - 1, 0);
+    applyFontStep();
+  });
+
+  // ---------- 음성 검색 ----------
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognitionCtor) {
+    el.voiceSearchBtn.hidden = false;
+    const recognizer = new SpeechRecognitionCtor();
+    recognizer.lang = "ko-KR";
+    recognizer.continuous = false;
+    recognizer.interimResults = false;
+
+    let listening = false;
+
+    el.voiceSearchBtn.addEventListener("click", () => {
+      if (listening) {
+        recognizer.stop();
+        return;
+      }
+      try {
+        recognizer.start();
+      } catch (err) {
+        console.error("음성 인식 시작 실패", err);
+      }
+    });
+
+    recognizer.addEventListener("start", () => {
+      listening = true;
+      el.voiceSearchBtn.classList.add("listening");
+    });
+    recognizer.addEventListener("end", () => {
+      listening = false;
+      el.voiceSearchBtn.classList.remove("listening");
+    });
+    recognizer.addEventListener("error", (e) => {
+      console.error("음성 인식 오류", e.error);
+    });
+    recognizer.addEventListener("result", (e) => {
+      const transcript = e.results[0][0].transcript.trim();
+      el.searchInput.value = transcript;
+      runSearch();
+    });
+  }
+
   // ---------- 초기화 ----------
   const savedMode = localStorage.getItem("dur_mode");
   if (savedMode === "expert") setMode("expert");
+
+  const savedFontStep = parseInt(localStorage.getItem("dur_font_step"), 10);
+  if (!Number.isNaN(savedFontStep) && FONT_STEPS[savedFontStep] !== undefined) {
+    fontStepIndex = savedFontStep;
+  }
+  applyFontStep();
 
   renderBasket();
   loadData().catch((err) => {

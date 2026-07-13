@@ -21,16 +21,25 @@
       <h1>DUR 도우미</h1>
       <p class="subtitle">여러 약을 함께 넣으면 병용금기·주의사항을 한 번에 확인합니다</p>
     </div>
-    <div class="mode-switch" role="group" aria-label="보기 모드 선택">
-      <button type="button" id="mode-lay-btn" class="active">일반인 모드</button>
-      <button type="button" id="mode-expert-btn">전문가 모드</button>
+    <div class="header-controls">
+      <div class="font-switch" role="group" aria-label="글자 크기 조절">
+        <button type="button" id="font-decrease-btn" title="글자 작게" aria-label="글자 작게">가<span class="font-sign">-</span></button>
+        <button type="button" id="font-increase-btn" title="글자 크게" aria-label="글자 크게">가<span class="font-sign">+</span></button>
+      </div>
+      <div class="mode-switch" role="group" aria-label="보기 모드 선택">
+        <button type="button" id="mode-lay-btn" class="active">일반인 모드</button>
+        <button type="button" id="mode-expert-btn">전문가 모드</button>
+      </div>
     </div>
   </header>
 
   <section class="card">
     <h2>1. 복용 중인 약 검색해서 담기</h2>
     <div class="search-wrap">
-      <input type="text" id="search-input" placeholder="상품명 또는 성분명을 입력하세요 (예: 타이레놀, 아스피린)" autocomplete="off" />
+      <div class="search-row">
+        <input type="text" id="search-input" placeholder="상품명 또는 성분명을 입력하세요 (예: 타이레놀, 아스피린)" autocomplete="off" />
+        <button type="button" id="voice-search-btn" title="음성으로 검색" aria-label="음성으로 검색" hidden>🎤</button>
+      </div>
       <div id="suggestions"></div>
     </div>
     <p class="search-hint">약 이름이 잘 기억나지 않으면
