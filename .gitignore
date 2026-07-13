@@ -1,0 +1,10 @@
+# 원본 xlsx는 용량이 크고 매달 갱신되므로 저장소에는 가공된 JSON만 커밋한다.
+data/raw/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc

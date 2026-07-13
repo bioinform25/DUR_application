@@ -1,0 +1,77 @@
+{
+  "source": "mock-seed (실제 DUR API 연동 전 데모용, data.go.kr 승인 후 fetch_dur_rules.py가 자동으로 대체)",
+  "rules": [
+    {
+      "id": "MOCK-001",
+      "category": "병용금기",
+      "severity": "contraindicated",
+      "ingredient_keys": ["warfarin sodium", "clarithromycin"],
+      "title": "와파린 - 클래리스로마이신(클래리트로마이신)",
+      "description": "클래리스로마이신 등 마크로라이드계 항생제가 와파린의 간대사(CYP3A4)를 억제하여 항응고 효과가 과도하게 증가할 수 있습니다. 출혈 위험이 크게 높아집니다.",
+      "management": "가능하면 병용을 피하고, 부득이하게 병용할 경우 INR(프로트롬빈시간)을 자주 확인하며 출혈 징후(멍, 코피, 잇몸출혈, 흑색변 등)를 관찰해야 합니다."
+    },
+    {
+      "id": "MOCK-002",
+      "category": "병용금기",
+      "severity": "contraindicated",
+      "ingredient_keys": ["simvastatin", "clarithromycin"],
+      "title": "심바스타틴 - 클래리스로마이신(클래리트로마이신)",
+      "description": "클래리스로마이신이 심바스타틴의 대사효소(CYP3A4)를 강하게 억제하여 혈중 농도가 급격히 상승, 횡문근융해증(근육 손상) 위험이 증가합니다.",
+      "management": "항생제 치료 기간 동안 스타틴 복용을 일시 중단하거나, 상호작용이 적은 다른 항생제/스타틴으로 대체하는 것을 고려해야 합니다."
+    },
+    {
+      "id": "MOCK-003",
+      "category": "병용금기",
+      "severity": "contraindicated",
+      "ingredient_keys": ["simvastatin", "ketoconazole"],
+      "title": "심바스타틴 - 케토코나졸",
+      "description": "케토코나졸 등 강력한 CYP3A4 억제제와 병용 시 심바스타틴 혈중농도가 크게 증가하여 횡문근융해증 위험이 높아집니다.",
+      "management": "병용을 피하고 대체 약제를 고려하십시오."
+    },
+    {
+      "id": "MOCK-004",
+      "category": "병용주의",
+      "severity": "caution",
+      "ingredient_keys": ["simvastatin", "fluconazole"],
+      "title": "심바스타틴 - 플루코나졸",
+      "description": "플루코나졸이 CYP3A4를 억제하여 심바스타틴 농도를 높일 수 있어 근육통, 근육병증 위험이 증가할 수 있습니다.",
+      "management": "병용 시 근육통·근력저하 등 증상을 주의 깊게 관찰하고, 필요시 스타틴 용량 조절을 고려하십시오."
+    },
+    {
+      "id": "MOCK-005",
+      "category": "병용금기",
+      "severity": "contraindicated",
+      "ingredient_keys": ["sildenafil citrate", "isosorbide dinitrate"],
+      "title": "실데나필 - 이소소르비드질산염(질산염 계열)",
+      "description": "PDE5 억제제(실데나필)와 질산염 계열 혈관확장제를 함께 복용하면 혈압이 급격히 떨어져 실신, 심근경색 등 심각한 심혈관계 부작용이 발생할 수 있습니다.",
+      "management": "절대 병용 금지. 질산염 제제 복용 중이거나 복용 예정이라면 반드시 처방의에게 알려야 합니다."
+    },
+    {
+      "id": "MOCK-006",
+      "category": "병용금기",
+      "severity": "contraindicated",
+      "ingredient_keys": ["sildenafil citrate", "diluted nitroglycerin"],
+      "title": "실데나필 - 니트로글리세린",
+      "description": "PDE5 억제제와 니트로글리세린 병용 시 심각한 저혈압이 유발될 수 있습니다.",
+      "management": "절대 병용 금지."
+    },
+    {
+      "id": "MOCK-007",
+      "category": "병용주의",
+      "severity": "caution",
+      "ingredient_keys": ["warfarin sodium", "aspirin"],
+      "title": "와파린 - 아스피린",
+      "description": "두 약물 모두 항혈전 작용이 있어 병용 시 출혈 위험이 상승합니다.",
+      "management": "명확한 병용 적응증(예: 특정 심장질환)이 없다면 병용을 피하고, 병용이 꼭 필요한 경우 출혈 징후를 면밀히 관찰해야 합니다."
+    },
+    {
+      "id": "MOCK-008",
+      "category": "노인주의",
+      "severity": "elderly-caution",
+      "ingredient_keys": ["amiodarone hydrochloride"],
+      "title": "아미오다론염산염 (노인주의)",
+      "description": "고령 환자에서 갑상선 기능 이상, 폐독성, 부정맥 등의 이상반응 위험이 높아 신중한 투여가 필요합니다.",
+      "management": "정기적인 갑상선·폐기능 모니터링이 권장됩니다."
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>DUR 도우미 - 다제약물 병용금기 확인</title>
+<meta name="description" content="복용 중인 여러 약을 함께 넣으면 국내 고시 기준 병용금기·주의사항을 확인해주는 DUR 도우미" />
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="mode-lay">
+<div class="app">
+
+  <header class="top">
+    <div>
+      <h1>DUR 도우미</h1>
+      <p class="subtitle">여러 약을 함께 넣으면 병용금기·주의사항을 한 번에 확인합니다</p>
+    </div>
+    <div class="mode-switch" role="group" aria-label="보기 모드 선택">
+      <button type="button" id="mode-lay-btn" class="active">일반인 모드</button>
+      <button type="button" id="mode-expert-btn">전문가 모드</button>
+    </div>
+  </header>
+
+  <section class="card">
+    <h2>1. 복용 중인 약 검색해서 담기</h2>
+    <div class="search-wrap">
+      <input type="text" id="search-input" placeholder="상품명 또는 성분명을 입력하세요 (예: 타이레놀, 아스피린)" autocomplete="off" />
+      <div id="suggestions"></div>
+    </div>
+    <p class="search-hint">약 이름이 잘 기억나지 않으면
+      <a href="https://www.health.kr/searchIdentity/search.asp" target="_blank" rel="noopener">약학정보원 알약 식별 서비스</a>에서 모양·색깔·각인으로 찾아보세요.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>2. 담은 약 목록 (바구니)</h2>
+    <ul id="basket-list"></ul>
+    <p class="basket-empty" id="basket-empty-msg">아직 담은 약이 없습니다. 위 검색창에서 약을 추가해주세요.</p>
+    <div class="basket-footer">
+      <span class="data-meta" id="basket-count"></span>
+      <button type="button" class="clear-btn" id="clear-basket-btn">전체 비우기</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>3. 병용금기 · 주의사항 분석 결과</h2>
+    <div id="results"></div>
+  </section>
+
+  <p class="disclaimer">
+    본 서비스는 건강보험심사평가원 약제급여목록표와 공공 DUR 데이터를 바탕으로 한 참고용 프로토타입이며,
+    의료진·약사의 처방 및 상담을 대체하지 않습니다. 실제 복약 결정은 반드시 의사 또는 약사와 상의하세요.
+    <span id="data-updated"></span>
+  </p>
+</div>
+
+<script src="js/normalize.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
