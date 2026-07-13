@@ -24,6 +24,8 @@
     modeLayBtn: document.getElementById("mode-lay-btn"),
     modeExpertBtn: document.getElementById("mode-expert-btn"),
     dataUpdated: document.getElementById("data-updated"),
+    themeToggleBtn: document.getElementById("theme-toggle-btn"),
+    themeToggleLabel: document.getElementById("theme-toggle-label"),
     fontDecreaseBtn: document.getElementById("font-decrease-btn"),
     fontIncreaseBtn: document.getElementById("font-increase-btn"),
     voiceSearchBtn: document.getElementById("voice-search-btn"),
@@ -376,11 +378,16 @@
   }
 
   // ---------- DUR 분석 ----------
+  // "advisory"는 성분 단일 기준 주의 안내(노인주의/특정연령대금기/투여기간주의/
+  // 용량주의)를 하나의 색상으로 묶은 버킷이다. 배지에는 이 버킷 이름 대신 각
+  // 규칙의 실제 category(rule.category, 예: "특정연령대금기")를 그대로 보여준다.
   function severityBucket(severity) {
     if (severity === "contraindicated") return "contraindicated";
     if (severity === "caution") return "caution";
-    if (severity === "elderly-caution") return "elderly";
     if (severity === "duplicate") return "duplicate";
+    if (["elderly-caution", "age-restricted", "duration-caution", "dose-caution"].includes(severity)) {
+      return "advisory";
+    }
     return "other";
   }
 
@@ -388,21 +395,27 @@
     return {
       contraindicated: "병용금기",
       caution: "병용주의",
-      elderly: "노인주의 등",
       duplicate: "효능군중복",
+      advisory: "복약 주의",
       other: "기타 주의",
     }[bucket];
   }
 
   // 일반인 모드에서는 의학적 세부사항 대신, 심각도에 맞는 상담 권고 문구를 강조해서 보여준다.
-  function severityLayAdvice(bucket) {
-    return {
-      contraindicated: "함께 복용하면 안 되는 조합(병용금기)입니다. 지금 복용 중이라면 반드시 처방한 의사 또는 약사와 상담하세요.",
-      caution: "함께 복용 시 주의가 필요한 조합입니다. 복용 전 약사·의사와 상담하는 것이 안전합니다.",
-      elderly: "고령 환자는 특히 주의가 필요한 약입니다. 복용 여부를 의사·약사와 상의하세요.",
-      duplicate: "비슷한 효과의 약을 중복으로 복용하고 있을 수 있습니다. 정말 둘 다 필요한지 약사·의사와 확인해보세요.",
-      other: "등록된 주의사항이 있습니다. 약사·의사와 상담하세요.",
-    }[bucket];
+  function severityAdvice(bucket, category) {
+    if (bucket === "contraindicated") {
+      return "함께 복용하면 안 되는 조합(병용금기)입니다. 지금 복용 중이라면 반드시 처방한 의사 또는 약사와 상담하세요.";
+    }
+    if (bucket === "caution") {
+      return "함께 복용 시 주의가 필요한 조합입니다. 복용 전 약사·의사와 상담하는 것이 안전합니다.";
+    }
+    if (bucket === "duplicate") {
+      return "비슷한 효과의 약을 중복으로 복용하고 있을 수 있습니다. 정말 둘 다 필요한지 약사·의사와 확인해보세요.";
+    }
+    if (bucket === "advisory") {
+      return `${category || "이 약"}에 해당하는 주의사항이 있습니다. 복용 여부를 약사·의사와 상의하세요.`;
+    }
+    return "등록된 주의사항이 있습니다. 약사·의사와 상담하세요.";
   }
 
   function analyzeBasket() {
@@ -467,6 +480,45 @@
     return found;
   }
 
+  // 발견된 항목들을 훑어 "종합 위험도"를 한 줄로 요약한다. 카드를 하나하나 안 읽어도
+  // 맨 위에서 심각성을 바로 파악할 수 있게 하기 위함(특히 스크롤이 부담스러운 사용자).
+  function buildRiskSummary(matches) {
+    const counts = {};
+    for (const m of matches) {
+      const b = severityBucket(m.rule.severity);
+      counts[b] = (counts[b] || 0) + 1;
+    }
+    const total = matches.length;
+
+    if (counts.contraindicated) {
+      return {
+        level: "높음",
+        bucketClass: "contraindicated",
+        headline: `병용금기 ${counts.contraindicated}건을 포함해 총 ${total}건 발견 — 반드시 약사·의사와 상담 후 복용하세요.`,
+      };
+    }
+    if (counts.caution || counts["food-interaction"]) {
+      const foodPart = counts["food-interaction"] ? ` (음식 상호작용 ${counts["food-interaction"]}건 포함)` : "";
+      return {
+        level: "중간",
+        bucketClass: "caution",
+        headline: `주의가 필요한 조합 총 ${total}건 발견${foodPart} — 복용 전 확인이 필요합니다.`,
+      };
+    }
+    if (counts.duplicate) {
+      return {
+        level: "중간",
+        bucketClass: "duplicate",
+        headline: `효능군 중복 등 총 ${total}건 발견 — 중복으로 복용 중인 약이 없는지 확인해보세요.`,
+      };
+    }
+    return {
+      level: "낮음",
+      bucketClass: "advisory",
+      headline: `참고할 주의사항 총 ${total}건 발견 — 심각한 위험은 아니지만 확인해두시면 좋습니다.`,
+    };
+  }
+
   function renderResults() {
     if (!state.drugsData || !state.rulesData) return;
 
@@ -484,10 +536,15 @@
       return;
     }
 
-    const order = ["contraindicated", "caution", "elderly", "duplicate", "other"];
+    const order = ["contraindicated", "caution", "duplicate", "advisory", "other"];
     matches.sort((a, b) => order.indexOf(severityBucket(a.rule.severity)) - order.indexOf(severityBucket(b.rule.severity)));
 
-    const summary = `<p class="result-summary"><strong>${matches.length}건</strong>의 주의사항이 발견되었습니다.</p>`;
+    const risk = buildRiskSummary(matches);
+    const summary = `
+      <div class="risk-banner ${risk.bucketClass}">
+        <span class="risk-level">종합 위험도: ${risk.level}</span>
+        <p class="risk-headline">${escapeHtml(risk.headline)}</p>
+      </div>`;
 
     const cards = matches
       .map((m) => {
@@ -497,14 +554,16 @@
         const ingredientKeyLabel = (m.rule.ingredient_keys || []).map(prettifyKey).join(" ↔ ");
         const pairCount = m.rule.product_pair_count;
 
+        const badgeText = m.rule.category || severityLabel(bucket);
+
         return `
         <div class="result-card ${bucket}">
-          <span class="result-badge">${severityLabel(bucket)}</span>
+          <span class="result-badge">${escapeHtml(badgeText)}</span>
           <p class="result-title">${escapeHtml(names)}</p>
 
           <div class="lay-only">
             ${m.rule.description ? `<p class="result-desc">${escapeHtml(m.rule.description)}</p>` : ""}
-            <p class="result-advice">${escapeHtml(severityLayAdvice(bucket))}</p>
+            <p class="result-advice">${escapeHtml(severityAdvice(bucket, m.rule.category))}</p>
           </div>
 
           <div class="expert-only">
@@ -670,6 +729,28 @@
     const now = new Date();
     el.printDate.textContent = now.toLocaleString("ko-KR");
     window.print();
+  });
+
+  // ---------- 다크모드 수동 토글 ----------
+  // "auto"일 때는 data-theme을 아예 안 붙여서 CSS의 prefers-color-scheme가 그대로 적용된다.
+  const THEME_CYCLE = ["auto", "light", "dark"];
+  const THEME_LABELS = { auto: "자동", light: "라이트", dark: "다크" };
+  let themeIndex = 0;
+
+  function applyTheme() {
+    const theme = THEME_CYCLE[themeIndex];
+    if (theme === "auto") {
+      document.documentElement.removeAttribute("data-theme");
+    } else {
+      document.documentElement.setAttribute("data-theme", theme);
+    }
+    el.themeToggleLabel.textContent = THEME_LABELS[theme];
+    localStorage.setItem("dur_theme", theme);
+  }
+
+  el.themeToggleBtn.addEventListener("click", () => {
+    themeIndex = (themeIndex + 1) % THEME_CYCLE.length;
+    applyTheme();
   });
 
   // ---------- 글자 크기 조절 ----------
@@ -838,6 +919,11 @@
     fontStepIndex = savedFontStep;
   }
   applyFontStep();
+
+  const savedTheme = localStorage.getItem("dur_theme");
+  const savedThemeIndex = THEME_CYCLE.indexOf(savedTheme);
+  if (savedThemeIndex >= 0) themeIndex = savedThemeIndex;
+  applyTheme();
 
   state.basket = loadBasket();
   renderBasket();

@@ -168,6 +168,20 @@ header.top p.subtitle {
 }
 .print-btn:hover { background: var(--primary-light); color: var(--primary-dark); }
 
+.theme-toggle-btn {
+  flex-shrink: 0;
+  border: 2px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-sub);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: calc(14px * var(--font-zoom, 1));
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.theme-toggle-btn:hover { background: var(--primary-light); color: var(--primary-dark); }
+
 .print-only { display: none; }
 
 /* ---------- 검색 ---------- */
@@ -465,10 +479,30 @@ header.top p.subtitle {
 }
 
 /* ---------- 분석 결과 ---------- */
-.result-summary {
-  font-size: calc(16px * var(--font-zoom, 1));
-  margin-bottom: 14px;
+.risk-banner {
+  border-radius: 12px;
+  border: 2px solid;
+  padding: 14px 18px;
+  margin-bottom: 16px;
 }
+.risk-level {
+  display: inline-block;
+  font-size: calc(14px * var(--font-zoom, 1));
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.6);
+  margin-bottom: 6px;
+}
+.risk-headline {
+  font-size: calc(16.5px * var(--font-zoom, 1));
+  font-weight: 700;
+  margin: 4px 0 0;
+}
+.risk-banner.contraindicated { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+.risk-banner.caution { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
+.risk-banner.duplicate { background: var(--dup-bg); border-color: var(--dup-border); color: var(--dup-text); }
+.risk-banner.advisory { background: var(--info-bg); border-color: var(--info-border); color: var(--info-text); }
 
 .result-card {
   border-radius: 12px;
@@ -479,7 +513,7 @@ header.top p.subtitle {
 
 .result-card.contraindicated { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
 .result-card.caution { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); }
-.result-card.elderly { background: var(--info-bg); border-color: var(--info-border); color: var(--info-text); }
+.result-card.advisory { background: var(--info-bg); border-color: var(--info-border); color: var(--info-text); }
 .result-card.duplicate { background: var(--dup-bg); border-color: var(--dup-border); color: var(--dup-text); }
 .result-card.other { background: #f3f4f6; border-color: #9ca3af; color: #374151; }
 
@@ -559,6 +593,30 @@ body.mode-expert .lay-only { display: none; }
   .link-btn { background: #202834; }
   #search-input { background: #141a22; color: var(--text); }
 }
+
+/* 앱 안의 다크모드 버튼으로 OS 설정과 무관하게 강제 전환할 때 사용.
+   data-theme="dark"/"light"이 없으면(자동) 위 prefers-color-scheme를 그대로 따른다. */
+:root[data-theme="dark"] {
+  --bg: #10151c;
+  --card-bg: #1a212b;
+  --text: #e6edf5;
+  --text-sub: #9aa7b6;
+  --border: #2b3644;
+  --primary-light: #1c2a44;
+}
+:root[data-theme="dark"] .link-btn { background: #202834; }
+:root[data-theme="dark"] #search-input { background: #141a22; color: var(--text); }
+
+:root[data-theme="light"] {
+  --bg: #f6f9fc;
+  --card-bg: #ffffff;
+  --text: #1f2937;
+  --text-sub: #4b5563;
+  --border: #dbe3ec;
+  --primary-light: #eaf1ff;
+}
+:root[data-theme="light"] .link-btn { background: #fff; }
+:root[data-theme="light"] #search-input { background: #fff; color: var(--text); }
 
 /* ---------- 인쇄 / PDF 저장 ---------- */
 @media print {

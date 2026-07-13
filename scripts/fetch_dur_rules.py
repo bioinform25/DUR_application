@@ -1,21 +1,28 @@
 """
 식품의약품안전처 '의약품안전사용서비스(DUR)품목정보' Open API에서
-병용금기 / 노인주의 / 효능군중복주의 정보를 가져와 data/dur_rules.json으로 정규화한다.
+병용금기 / 노인주의 / 특정연령대금기 / 투여기간주의 / 용량주의 / 효능군중복주의
+정보를 가져와 data/dur_rules.json으로 정규화한다.
 
 API 키가 없으면(로컬 최초 실행, PR 미리보기 등) scripts/mock_dur_rules_seed.json을
 그대로 사용해 프론트엔드가 항상 동작하도록 한다.
 
-엔드포인트: 1471000/DURPrdlstInfoService03 (실제 서비스키로 테스트해 확인).
-- getUsjntTabooInfoList03  : 병용금기 (성분쌍 단위, MIXTURE_* 필드로 상대 성분 제공)
-- getOdsnAtentInfoList03   : 노인주의 (성분 단일 단위)
-- getEfcyDplctInfoList03   : 효능군중복주의 (성분 단일 + EFFECT_NAME 효능군.
+엔드포인트: 1471000/DURPrdlstInfoService03 (공식 문서가 없어 실제 서비스키로
+직접 여러 오퍼레이션 이름을 시도해 확인함 - 아래 목록 외의 이름은 404였다).
+- getUsjntTabooInfoList03      : 병용금기 (성분쌍 단위, MIXTURE_* 필드로 상대 성분 제공)
+- getOdsnAtentInfoList03       : 노인주의 (성분 단일 단위)
+- getSpcifyAgrdeTabooInfoList03: 특정연령대금기 (성분 단일, PROHBT_CONTENT에 연령 조건 텍스트)
+- getMdctnPdAtentInfoList03    : 투여기간주의 (성분 단일)
+- getCpctyAtentInfoList03      : 용량주의 (성분 단일)
+- getEfcyDplctInfoList03       : 효능군중복주의 (성분 단일 + EFFECT_NAME 효능군.
   같은 효능군에 속한 서로 다른 성분 2개를 함께 먹으면 중복으로 본다 - 병용금기처럼
   미리 정해진 쌍이 아니라 '같은 그룹에 속하는지'로 런타임에 판정해야 해서, 다른
-  두 오퍼레이션과 달리 rules 배열이 아니라 duplicate_groups(효능군 -> 성분키 목록)
+  오퍼레이션들과 달리 rules 배열이 아니라 duplicate_groups(효능군 -> 성분키 목록)
   형태로 별도 저장한다.
 
-같은 서비스 그룹에 연령금기(getSpcifyAgrdeTabooInfoList03), 임부금기
-(getPwomanTabooInfoList03) 등도 더 있다. 동일한 paginate() 패턴으로 추가할 수 있다.
+같은 서비스 그룹에 임부금기, 서방정분할주의도 있다고 알려져 있으나 정확한
+오퍼레이션 이름을 확인하지 못했다(추정 이름들 모두 404). data.go.kr 마이페이지의
+Swagger 문서에서 정확한 이름을 확인하면 동일한 fetch_single_ingredient_category()
+패턴으로 손쉽게 추가할 수 있다.
 """
 import json
 import math
@@ -42,6 +49,9 @@ MOCK_SEED = Path(__file__).resolve().parent / "mock_dur_rules_seed.json"
 API_BASE = "https://apis.data.go.kr/1471000/DURPrdlstInfoService03"
 URL_USJNT_TABOO = f"{API_BASE}/getUsjntTabooInfoList03"
 URL_ODSN_ATENT = f"{API_BASE}/getOdsnAtentInfoList03"
+URL_SPCIFY_AGRDE = f"{API_BASE}/getSpcifyAgrdeTabooInfoList03"
+URL_MDCTN_PD = f"{API_BASE}/getMdctnPdAtentInfoList03"
+URL_CPCTY = f"{API_BASE}/getCpctyAtentInfoList03"
 URL_EFCY_DPLCT = f"{API_BASE}/getEfcyDplctInfoList03"
 
 NUM_OF_ROWS = 500  # 이 오퍼레이션들이 허용하는 페이지당 최대 건수
@@ -192,8 +202,16 @@ def fetch_usjnt_taboo(service_key: str) -> list:
     return list(rules_by_pair.values())
 
 
-def fetch_odsn_atent(service_key: str) -> list:
-    """노인주의: 성분 단일 기준 주의사항(상대 약물 없음)."""
+def fetch_single_ingredient_category(
+    service_key: str,
+    base_url: str,
+    id_prefix: str,
+    severity: str,
+    default_description: str,
+    label: str,
+) -> list:
+    """성분 단일 기준 주의사항 오퍼레이션들의 공용 처리기
+    (노인주의/특정연령대금기/투여기간주의/용량주의 - 전부 응답 구조가 동일하다)."""
     rules_by_ingr: dict = {}
 
     def on_items(items):
@@ -204,13 +222,14 @@ def fetch_odsn_atent(service_key: str) -> list:
             entry = rules_by_ingr.get(key)
             if entry is None:
                 ingr_kor = item.get("INGR_NAME") or item.get("INGR_ENG_NAME") or ""
+                category = item.get("TYPE_NAME") or label
                 entry = {
-                    "id": f"ODSN-{key}",
-                    "category": item.get("TYPE_NAME") or "노인주의",
-                    "severity": "elderly-caution",
+                    "id": f"{id_prefix}-{key}",
+                    "category": category,
+                    "severity": severity,
                     "ingredient_keys": [key],
-                    "title": f"{ingr_kor.strip()} (노인주의)",
-                    "description": item.get("PROHBT_CONTENT") or "고령 환자에서 이상반응 위험이 높아 신중한 투여가 필요한 성분입니다.",
+                    "title": f"{ingr_kor.strip()} ({label})",
+                    "description": item.get("PROHBT_CONTENT") or default_description,
                     "management": item.get("REMARK") or "",
                     "reference_items": [],
                     "product_pair_count": 0,
@@ -221,7 +240,7 @@ def fetch_odsn_atent(service_key: str) -> list:
             if name and name not in entry["reference_items"] and len(entry["reference_items"]) < MAX_REFERENCE_ITEMS:
                 entry["reference_items"].append(name)
 
-    paginate(service_key, URL_ODSN_ATENT, on_items, label="노인주의")
+    paginate(service_key, base_url, on_items, label=label)
     return list(rules_by_ingr.values())
 
 
@@ -261,7 +280,22 @@ def main() -> int:
     else:
         try:
             taboo_rules = fetch_usjnt_taboo(service_key)
-            elderly_rules = fetch_odsn_atent(service_key)
+            elderly_rules = fetch_single_ingredient_category(
+                service_key, URL_ODSN_ATENT, "ODSN", "elderly-caution",
+                "고령 환자에서 이상반응 위험이 높아 신중한 투여가 필요한 성분입니다.", "노인주의",
+            )
+            age_rules = fetch_single_ingredient_category(
+                service_key, URL_SPCIFY_AGRDE, "AGRDE", "age-restricted",
+                "특정 연령대에서는 사용이 제한되는 성분입니다.", "특정연령대금기",
+            )
+            duration_rules = fetch_single_ingredient_category(
+                service_key, URL_MDCTN_PD, "MDCTNPD", "duration-caution",
+                "장기간 투여 시 주의가 필요한 성분입니다. 정해진 투여기간을 지켜야 합니다.", "투여기간주의",
+            )
+            dose_rules = fetch_single_ingredient_category(
+                service_key, URL_CPCTY, "CPCTY", "dose-caution",
+                "용량 조절이 특히 중요한 성분입니다. 정해진 용량을 초과하지 않도록 주의해야 합니다.", "용량주의",
+            )
             duplicate_groups = fetch_efcy_dplct(service_key)
         except Exception as exc:  # noqa: BLE001
             print(f"[fetch_dur_rules] API 호출 실패, 목업으로 대체합니다: {exc}")
@@ -270,8 +304,8 @@ def main() -> int:
             duplicate_groups = seed.get("duplicate_groups", {})
             source = f"mock-fallback (API 오류: {exc})"
         else:
-            rules = taboo_rules + elderly_rules
-            source = "data.go.kr DUR품목정보 API (병용금기+노인주의+효능군중복주의)"
+            rules = taboo_rules + elderly_rules + age_rules + duration_rules + dose_rules
+            source = "data.go.kr DUR품목정보 API (병용금기+노인주의+특정연령대금기+투여기간주의+용량주의+효능군중복주의)"
 
     out = {
         "updated": date.today().isoformat(),
