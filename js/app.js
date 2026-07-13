@@ -26,6 +26,8 @@
     fontDecreaseBtn: document.getElementById("font-decrease-btn"),
     fontIncreaseBtn: document.getElementById("font-increase-btn"),
     voiceSearchBtn: document.getElementById("voice-search-btn"),
+    printBtn: document.getElementById("print-btn"),
+    printDate: document.getElementById("print-date"),
   };
 
   // ---------- 데이터 로딩 ----------
@@ -415,6 +417,17 @@
     el.modeExpertBtn.classList.toggle("active", mode === "expert");
     localStorage.setItem("dur_mode", mode);
   }
+
+  // ---------- 인쇄 / PDF 저장 ----------
+  el.printBtn.addEventListener("click", () => {
+    if (state.basket.length === 0) {
+      alert("바구니에 약을 담아야 인쇄할 내용이 있습니다.");
+      return;
+    }
+    const now = new Date();
+    el.printDate.textContent = now.toLocaleString("ko-KR");
+    window.print();
+  });
 
   // ---------- 글자 크기 조절 ----------
   const FONT_STEPS = [0.9, 1, 1.15, 1.3];

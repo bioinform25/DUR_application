@@ -16,6 +16,11 @@
 <body class="mode-lay">
 <div class="app">
 
+  <div id="print-header" class="print-only">
+    <h1>DUR 도우미 - 복약 상담 요약</h1>
+    <p>출력일: <span id="print-date"></span></p>
+  </div>
+
   <header class="top">
     <div>
       <h1>DUR 도우미</h1>
@@ -58,7 +63,10 @@
   </section>
 
   <section class="card">
-    <h2>3. 병용금기 · 주의사항 분석 결과</h2>
+    <div class="card-header-row">
+      <h2>3. 병용금기 · 주의사항 분석 결과</h2>
+      <button type="button" id="print-btn" class="print-btn no-print">🖨 인쇄 / PDF 저장</button>
+    </div>
     <div id="results"></div>
   </section>
 

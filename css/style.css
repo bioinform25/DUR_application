@@ -130,6 +130,31 @@ header.top p.subtitle {
   color: var(--primary-dark);
 }
 
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.card-header-row h2 { margin-bottom: 0; }
+
+.print-btn {
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text-sub);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: calc(13px * var(--font-zoom, 1));
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.print-btn:hover { background: var(--primary-light); color: var(--primary-dark); }
+
+.print-only { display: none; }
+
 /* ---------- 검색 ---------- */
 .search-wrap { position: relative; }
 
@@ -403,4 +428,46 @@ body.mode-expert .lay-only { display: none; }
   }
   .link-btn { background: #202834; }
   #search-input { background: #141a22; color: var(--text); }
+}
+
+/* ---------- 인쇄 / PDF 저장 ---------- */
+@media print {
+  body { background: #fff; color: #000; font-size: 13px; }
+  .app { max-width: 100%; padding: 0; }
+
+  .no-print,
+  .header-controls,
+  .search-wrap,
+  .search-hint,
+  .basket-footer .clear-btn,
+  .remove-btn,
+  .link-btn,
+  #suggestions,
+  .loading {
+    display: none !important;
+  }
+
+  .print-only { display: block; }
+  #print-header { margin-bottom: 16px; }
+  #print-header h1 { font-size: 20px; margin: 0 0 4px; }
+  #print-header p { font-size: 12px; color: #444; margin: 0 0 12px; }
+
+  /* 인쇄물은 화면 모드와 무관하게 상담에 필요한 상세 정보를 모두 보여준다 */
+  .lay-only { display: none !important; }
+  .expert-only { display: block !important; }
+
+  .card {
+    box-shadow: none;
+    border: 1px solid #bbb;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .result-card {
+    border-width: 1px;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  a[href]::after { content: ""; } /* 링크 URL 병기 방지(불필요한 잉크 절약) */
 }
