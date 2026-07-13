@@ -20,15 +20,6 @@ jobs:
       - name: 저장소 체크아웃
         uses: actions/checkout@v4
 
-      - name: (진단) 환경 확인
-        shell: bash
-        run: |
-          echo "PATH=$PATH"
-          which python || echo "python not found"
-          which pip || echo "pip not found"
-          python --version || true
-          python -m pip --version || true
-
       - name: 의존성 설치
         shell: bash
         run: python -m pip install -r scripts/requirements.txt
