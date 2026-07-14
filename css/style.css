@@ -417,6 +417,16 @@ header.top p.subtitle {
   margin: 0 0 12px;
 }
 
+.webview-warning {
+  font-size: calc(14px * var(--font-zoom, 1));
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+}
+
 #reminder-list {
   list-style: none;
   margin: 0;

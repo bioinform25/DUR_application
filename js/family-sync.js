@@ -31,6 +31,18 @@
 
   document.getElementById("family-share-card").hidden = false;
 
+  // 카카오톡/인스타그램 등 메신저 앱 내장 브라우저(WebView)에서는 구글이 보안 정책상
+  // OAuth 로그인을 아예 차단한다("disallowed_useragent" 403 에러). 코드로 우회할 방법은
+  // 없어서, 감지되면 실제 브라우저로 열어달라는 안내만 미리 보여준다.
+  function isInAppBrowser() {
+    const ua = navigator.userAgent || "";
+    return /KAKAOTALK|Instagram|FBAN|FBAV|FB_IAB|Line\/|NAVER\(inapp|DaumApps|; ?wv\)/i.test(ua);
+  }
+  if (isInAppBrowser()) {
+    const warning = document.getElementById("webview-warning");
+    if (warning) warning.hidden = false;
+  }
+
   firebase.initializeApp(FIREBASE_CONFIG);
   const auth = firebase.auth();
   const db = firebase.firestore();
