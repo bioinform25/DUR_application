@@ -12,12 +12,24 @@
     mode: "lay",      // 'lay' | 'expert'
     highlightIndex: -1,
     currentMatches: [],
+    familyReadOnly: false, // 활성 가족 그룹에서 내 역할이 viewer면 바구니/알림 편집 차단
   };
+
+  // 가족 그룹에서 "보기 전용(viewer)" 역할일 때 바구니/알림 편집을 막는다.
+  // family-sync.js가 없거나 그룹에 속하지 않은 사용자에게는 항상 false라 영향 없음.
+  function assertEditable() {
+    if (state.familyReadOnly) {
+      alert("이 그룹은 보기 전용으로 참여 중입니다. 바구니/알림 수정은 편집자만 할 수 있습니다.");
+      return false;
+    }
+    return true;
+  }
 
   const el = {
     searchInput: document.getElementById("search-input"),
     suggestions: document.getElementById("suggestions"),
     basketList: document.getElementById("basket-list"),
+    basketReadonlyNote: document.getElementById("basket-readonly-note"),
     basketEmptyMsg: document.getElementById("basket-empty-msg"),
     basketCount: document.getElementById("basket-count"),
     clearBasketBtn: document.getElementById("clear-basket-btn"),
@@ -464,6 +476,7 @@
   function addToBasket(item) {
     const entry = toBasketEntry(item);
     addToSearchHistory(item, entry.uid);
+    if (!assertEditable()) return;
     if (state.basket.some((b) => b.uid === entry.uid)) return;
     state.basket.push(entry);
     saveBasket();
@@ -472,6 +485,7 @@
   }
 
   function removeFromBasket(uid) {
+    if (!assertEditable()) return;
     state.basket = state.basket.filter((b) => b.uid !== uid);
     saveBasket();
     renderBasket();
@@ -512,6 +526,7 @@
   }
 
   function swapBasketItem(oldUid, newProductCode) {
+    if (!assertEditable()) return;
     const idx = state.basket.findIndex((b) => b.uid === oldUid);
     if (idx === -1) return;
     const product = state.productsByCode[newProductCode];
@@ -530,6 +545,7 @@
   }
 
   el.clearBasketBtn.addEventListener("click", () => {
+    if (!assertEditable()) return;
     state.basket = [];
     saveBasket();
     renderBasket();
@@ -564,6 +580,8 @@
   function renderBasket() {
     el.basketEmptyMsg.style.display = state.basket.length ? "none" : "block";
     el.basketCount.textContent = state.basket.length ? `담은 약 ${state.basket.length}개` : "";
+    el.basketReadonlyNote.hidden = !state.familyReadOnly;
+    el.clearBasketBtn.hidden = state.familyReadOnly;
 
     el.basketList.innerHTML = state.basket
       .map((b) => {
@@ -574,7 +592,7 @@
              ${alt.savings.toLocaleString()}원 더 저렴합니다 (${alt.current.price.toLocaleString()}원 → ${alt.cheapest.price.toLocaleString()}원)</div>`
           : "";
 
-        const swapCandidates = findSameIngredientProducts(b);
+        const swapCandidates = state.familyReadOnly ? [] : findSameIngredientProducts(b);
         const swapHtml = swapCandidates.length
           ? `<button type="button" class="link-btn swap-toggle-btn no-print" data-uid="${escapeHtml(b.uid)}">🔄 다른 용량으로 바꾸기</button>
              <div class="swap-panel no-print" data-uid="${escapeHtml(b.uid)}" hidden>
@@ -609,8 +627,8 @@
           </div>
           <div class="actions">
             <a class="link-btn health-link" title="약학정보원에서 상세정보 보기" href="${healthLink}" target="_blank" rel="noopener">약학정보원</a>
-            <button class="link-btn reminder-add-btn no-print" title="복약 알림 등록" data-label="${escapeHtml(b.label)}">⏰</button>
-            <button class="remove-btn" title="바구니에서 빼기" data-uid="${b.uid}">×</button>
+            ${state.familyReadOnly ? "" : `<button class="link-btn reminder-add-btn no-print" title="복약 알림 등록" data-label="${escapeHtml(b.label)}">⏰</button>`}
+            ${state.familyReadOnly ? "" : `<button class="remove-btn" title="바구니에서 빼기" data-uid="${b.uid}">×</button>`}
           </div>
         </li>`;
       })
@@ -934,6 +952,7 @@
   }
 
   function addReminder(label) {
+    if (!assertEditable()) return;
     if (reminders.some((r) => r.label === label)) {
       alert("이미 등록된 약입니다. 아래 목록에서 시간을 추가해주세요.");
       return;
@@ -1318,6 +1337,7 @@
   // 이 반영을 다시 Firestore로 재전송하지 않는다.
   window.addEventListener("family-data-updated", (e) => {
     const data = e.detail || {};
+    state.familyReadOnly = !!data.readOnly;
     if (Array.isArray(data.basket)) {
       state.basket = data.basket;
       saveBasket();

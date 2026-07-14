@@ -106,6 +106,7 @@
 
   <section class="card">
     <h2>2. 담은 약 목록 (바구니)</h2>
+    <p class="reminder-hint" id="basket-readonly-note" hidden>👀 보기 전용으로 참여 중인 가족 그룹입니다. 바구니 수정은 편집자만 할 수 있습니다.</p>
     <ul id="basket-list"></ul>
     <p class="basket-empty" id="basket-empty-msg">아직 담은 약이 없습니다. 위 검색창에서 약을 추가해주세요.</p>
     <div class="basket-footer">
@@ -149,18 +150,24 @@
     </div>
     <div id="family-signed-in" hidden>
       <p id="family-status" class="reminder-hint"></p>
-      <div id="family-no-group">
+
+      <div class="family-create-join-row">
         <button type="button" id="family-create-btn" class="print-btn">새 가족 그룹 만들기</button>
         <div class="family-join-row">
           <input type="text" id="family-join-code" placeholder="초대 코드 6자리" maxlength="6" />
           <button type="button" id="family-join-btn" class="clear-btn">참여하기</button>
         </div>
       </div>
-      <div id="family-group-info" hidden>
-        <p>가족 코드: <strong id="family-code-display"></strong><br />
-          <span class="reminder-hint">이 코드를 가족에게 알려주면 같은 바구니·알림을 공유할 수 있습니다.</span></p>
-        <button type="button" id="family-leave-btn" class="clear-btn">그룹 나가기</button>
+
+      <p class="reminder-hint">여러 그룹에 속할 수 있습니다. 그룹 이름은 이 화면에서 나만 볼 수 있게 자유롭게 붙여보세요.
+        참여 시에는 항상 "보기전용"으로 시작하며, 편집 권한은 그 그룹의 편집자가 올려줘야 합니다.</p>
+      <ul id="family-group-list" class="family-group-list"></ul>
+
+      <div id="family-member-panel" class="family-member-panel" hidden>
+        <h3>활성 그룹 멤버 관리</h3>
+        <ul id="family-member-list"></ul>
       </div>
+
       <button type="button" id="family-signout-btn" class="clear-btn">로그아웃</button>
     </div>
   </section>

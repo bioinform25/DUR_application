@@ -664,7 +664,14 @@ header.top p.subtitle {
 }
 
 /* ---------- 가족 공유 ---------- */
-.family-join-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.family-create-join-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+.family-join-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 #family-join-code {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -674,12 +681,103 @@ header.top p.subtitle {
   text-transform: uppercase;
   width: 140px;
 }
-#family-code-display {
-  font-size: calc(20px * var(--font-zoom, 1));
-  letter-spacing: 0.1em;
+#family-signed-in > .clear-btn { margin-top: 12px; }
+
+.family-group-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.family-group-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: var(--card-bg);
+}
+.family-group-item.active { border-color: var(--primary); border-width: 2px; }
+
+.family-group-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.family-nickname-input {
+  flex: 1;
+  min-width: 140px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: calc(15px * var(--font-zoom, 1));
+  font-weight: 700;
+  background: var(--card-bg);
+  color: var(--text);
+}
+
+.family-role-badge {
+  display: inline-block;
+  font-size: calc(12px * var(--font-zoom, 1));
+  font-weight: 800;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  flex-shrink: 0;
+}
+
+.family-group-meta {
+  font-size: calc(12.5px * var(--font-zoom, 1));
+  color: var(--text-sub);
+  margin-top: 6px;
+}
+
+.family-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.family-active-tag {
+  font-size: calc(13px * var(--font-zoom, 1));
+  font-weight: 700;
   color: var(--primary-dark);
 }
-#family-signed-in > .clear-btn { margin-top: 12px; }
+
+.family-member-panel {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fbfcff;
+}
+.family-member-panel h3 { margin: 0 0 8px; font-size: calc(15px * var(--font-zoom, 1)); }
+
+.family-member-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.family-member-item:last-child { border-bottom: none; }
+.family-member-name { font-weight: 700; font-size: calc(14px * var(--font-zoom, 1)); flex: 1; min-width: 100px; }
+
+.family-role-select {
+  font-size: calc(13.5px * var(--font-zoom, 1));
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+}
 
 .link-btn {
   display: inline-flex;
