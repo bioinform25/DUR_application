@@ -187,7 +187,9 @@
         const localHasData = (local.basket && local.basket.length) || (local.reminders && local.reminders.length);
         const remoteEmpty = (!data.basket || !data.basket.length) && (!data.reminders || !data.reminders.length);
         if (localHasData && remoteEmpty) {
-          db.collection("families").doc(familyId).update({ basket: local.basket, reminders: local.reminders });
+          db.collection("families").doc(familyId)
+            .update({ basket: sanitize(local.basket), reminders: sanitize(local.reminders) })
+            .catch((err) => console.error("[family-sync] 초기 동기화 실패", err));
           return;
         }
       }
@@ -198,6 +200,14 @@
     });
   }
 
+  // Firestore는 값이 undefined인 필드가 있으면 update() 자체를 동기적으로 예외를
+  // 던지며 거부한다(localStorage/JSON.stringify는 조용히 무시하는 것과 다르다).
+  // 바구니 항목에는 kind에 따라 안 쓰는 필드(code 또는 key)가 undefined로 남아있을
+  // 수 있어, 보내기 전에 JSON 왕복으로 그런 필드를 전부 제거한다.
+  function sanitize(value) {
+    return JSON.parse(JSON.stringify(value));
+  }
+
   // app.js가 바구니/알림을 저장할 때마다 호출해서 Firestore에도 반영한다.
   // (원격 변경을 받아 반영하는 도중에는 재전송하지 않아 무한 루프를 막는다)
   window.FamilySync = {
@@ -205,11 +215,13 @@
     isApplyingRemote: () => state.applyingRemote,
     pushBasket(basket) {
       if (!state.familyId || state.applyingRemote) return;
-      db.collection("families").doc(state.familyId).update({ basket });
+      db.collection("families").doc(state.familyId).update({ basket: sanitize(basket) })
+        .catch((err) => console.error("[family-sync] 바구니 동기화 실패", err));
     },
     pushReminders(reminders) {
       if (!state.familyId || state.applyingRemote) return;
-      db.collection("families").doc(state.familyId).update({ reminders });
+      db.collection("families").doc(state.familyId).update({ reminders: sanitize(reminders) })
+        .catch((err) => console.error("[family-sync] 알림 동기화 실패", err));
     },
   };
 })();
