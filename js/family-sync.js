@@ -1,6 +1,6 @@
 /*
- * 가족 공유: Firebase Auth(구글 로그인) + Firestore로 바구니/복약알림을
- * 가족 그룹 안에서 실시간으로 공유한다.
+ * 공유: Firebase Auth(구글 로그인) + Firestore로 바구니/복약알림을
+ * 그룹 안에서 실시간으로 공유한다.
  *
  * 설계(2단계): 한 사용자가 여러 그룹에 속할 수 있고, 그중 "활성 그룹" 하나만
  * 현재 바구니/알림과 실시간 동기화된다(동시에 여러 그룹과 동기화하면 충돌 해결이
@@ -9,7 +9,7 @@
  * (공유 데이터가 아니라 users/{uid} 문서 아래에 개인적으로 저장됨).
  *
  * FIREBASE_CONFIG가 비어 있으면 이 파일은 아무 것도 하지 않고 조용히 빠진다 -
- * 즉 가족 공유를 설정하지 않은 사용자에게는 이 파일이 있어도 전혀 영향이 없다.
+ * 즉 공유 기능을 설정하지 않은 사용자에게는 이 파일이 있어도 전혀 영향이 없다.
  */
 (function () {
   "use strict";
@@ -25,7 +25,7 @@
     return /KAKAOTALK|Instagram|FBAN|FBAV|FB_IAB|Line\/|NAVER\(inapp|DaumApps|; ?wv\)/i.test(ua);
   }
   if (isInAppBrowser()) {
-    // 이 경고는 탭(가족 공유) 안이 아니라 페이지 상단에 항상 떠 있는 배너라서,
+    // 이 경고는 탭(공유) 안이 아니라 페이지 상단에 항상 떠 있는 배너라서,
     // 사용자가 어느 탭을 보고 있든, Firebase가 로딩되든 안 되든 상관없이 보인다.
     const warning = document.getElementById("webview-warning");
     if (warning) warning.hidden = false;
@@ -45,7 +45,7 @@
   };
 
   if (!FIREBASE_CONFIG || typeof firebase === "undefined") {
-    console.info("[family-sync] Firebase 설정이 없어 가족 공유 기능이 비활성화됩니다.");
+    console.info("[family-sync] Firebase 설정이 없어 공유 기능이 비활성화됩니다.");
     return;
   }
 
@@ -142,10 +142,43 @@
 
     await refreshGroupMemberInfo();
 
-    const savedActive = localStorage.getItem(ACTIVE_FAMILY_KEY);
     const familyIds = Object.keys(state.groups);
+    if (!familyIds.length) {
+      // 속한 그룹이 하나도 없으면 "내 약"이라는 개인 그룹을 자동으로 만들어준다.
+      // 이러면 나중에 다른 사람 그룹(예: 할머니 그룹)에 참여해도, 그건 완전히 다른
+      // Firestore 문서라 내 개인 바구니는 전혀 안 건드려진다 - 그룹 전환 버튼으로
+      // 언제든 "내 약"으로 돌아올 수 있다. (이 로직이 없던 이전 버전에서는, 그룹에
+      // 참여하는 순간 로컬에만 있던 개인 바구니가 통째로 대체돼버리는 문제가 있었다)
+      await createGroup(uid, "내 약");
+      return;
+    }
+
+    const savedActive = localStorage.getItem(ACTIVE_FAMILY_KEY);
     const activeId = savedActive && state.groups[savedActive] ? savedActive : familyIds[0] || null;
     setActiveGroup(activeId);
+  }
+
+  async function createGroup(uid, nickname) {
+    const code = genFamilyCode();
+    await db
+      .collection("families")
+      .doc(code)
+      .set({
+        createdBy: uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        members: { [uid]: { role: "editor", displayName: state.user.displayName || "" } },
+        basket: [],
+        reminders: [],
+        takenDoses: [],
+      });
+    await db
+      .collection("users")
+      .doc(uid)
+      .set({ familyGroups: { [code]: { nickname: nickname || "" } } }, { merge: true });
+    state.groups[code] = { nickname: nickname || "" };
+    await refreshGroupMemberInfo();
+    setActiveGroup(code);
+    return code;
   }
 
   // 그룹 목록에 표시할 멤버 수/내 역할을 파악하려고, 속한 각 그룹 문서를 한 번씩 읽어온다
@@ -243,33 +276,19 @@
         state.applyingRemote = true;
         window.dispatchEvent(
           new CustomEvent("family-data-updated", {
-            detail: { basket: data.basket || [], reminders: data.reminders || [], readOnly: myRole !== "editor" },
+            detail: {
+              basket: data.basket || [],
+              reminders: data.reminders || [],
+              takenDoses: data.takenDoses || [],
+              readOnly: myRole !== "editor",
+            },
           })
         );
         state.applyingRemote = false;
       });
   }
 
-  el.createBtn.addEventListener("click", async () => {
-    const code = genFamilyCode();
-    await db
-      .collection("families")
-      .doc(code)
-      .set({
-        createdBy: state.user.uid,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        members: { [state.user.uid]: { role: "editor", displayName: state.user.displayName || "" } },
-        basket: [],
-        reminders: [],
-      });
-    await db
-      .collection("users")
-      .doc(state.user.uid)
-      .set({ familyGroups: { [code]: { nickname: "" } } }, { merge: true });
-    state.groups[code] = { nickname: "" };
-    await refreshGroupMemberInfo();
-    setActiveGroup(code);
-  });
+  el.createBtn.addEventListener("click", () => createGroup(state.user.uid, ""));
 
   el.joinBtn.addEventListener("click", async () => {
     const code = el.joinCodeInput.value.trim().toUpperCase();
@@ -305,7 +324,7 @@
   });
 
   async function leaveGroup(familyId) {
-    if (!confirm("이 가족 그룹에서 나가시겠습니까? (그룹 자체는 없어지지 않습니다)")) return;
+    if (!confirm("이 그룹에서 나가시겠습니까? (그룹 자체는 없어지지 않습니다)")) return;
     await db
       .collection("families")
       .doc(familyId)
@@ -366,7 +385,7 @@
   function renderGroupList() {
     const familyIds = Object.keys(state.groups);
     if (!familyIds.length) {
-      el.groupList.innerHTML = '<p class="reminder-hint">아직 속한 가족 그룹이 없습니다. 위에서 만들거나 참여해보세요.</p>';
+      el.groupList.innerHTML = '<p class="reminder-hint">아직 속한 그룹이 없습니다. 위에서 만들거나 참여해보세요.</p>';
       el.memberPanel.hidden = true;
       return;
     }
@@ -470,6 +489,17 @@
       const g = state.activeFamilyId && state.groups[state.activeFamilyId];
       return !!g && g.myRole !== "editor";
     },
+    getCurrentUserId: () => (state.user ? state.user.uid : null),
+    // 활성 그룹 멤버 목록(알림 받을 사람 지정 등에 사용) - 연결 안 돼 있으면 null.
+    getActiveGroupMembers() {
+      const g = state.activeFamilyId && state.groups[state.activeFamilyId];
+      if (!g || !g.members) return null;
+      return Object.keys(g.members).map((uid) => ({
+        uid,
+        displayName: g.members[uid].displayName || "이름 없음",
+        role: g.members[uid].role,
+      }));
+    },
     pushBasket(basket) {
       if (!state.activeFamilyId || state.applyingRemote || this.isReadOnly()) return;
       db.collection("families")
@@ -483,6 +513,15 @@
         .doc(state.activeFamilyId)
         .update({ reminders: sanitize(reminders) })
         .catch((err) => console.error("[family-sync] 알림 동기화 실패", err));
+    },
+    // 복용 완료 체크는 보기전용 멤버도 자기 몫은 표시할 수 있어야 하므로 isReadOnly 가드를
+    // 걸지 않는다(Firestore 보안 규칙에서도 viewer가 takenDoses만 갱신하는 건 허용해둠).
+    pushTakenDoses(takenDoses) {
+      if (!state.activeFamilyId || state.applyingRemote) return;
+      db.collection("families")
+        .doc(state.activeFamilyId)
+        .update({ takenDoses: sanitize(takenDoses) })
+        .catch((err) => console.error("[family-sync] 복용 체크 동기화 실패", err));
     },
   };
 })();

@@ -297,6 +297,22 @@ header.top p.subtitle {
   50% { opacity: 0.55; }
 }
 
+.voice-search-hint {
+  margin: 8px 0 0;
+  font-size: calc(13.5px * var(--font-zoom, 1));
+  color: var(--text-sub);
+}
+
+.voice-search-status {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: calc(14px * var(--font-zoom, 1));
+  font-weight: 700;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
 #search-input:focus {
   border-color: var(--primary);
 }
@@ -584,6 +600,7 @@ header.top p.subtitle {
   background: var(--primary-light);
 }
 .today-schedule-item.past { opacity: 0.5; }
+.today-schedule-item.taken { opacity: 0.75; }
 .today-schedule-time {
   font-weight: 800;
   font-size: calc(15px * var(--font-zoom, 1));
@@ -591,6 +608,16 @@ header.top p.subtitle {
 }
 .today-schedule-name {
   font-size: calc(15px * var(--font-zoom, 1));
+  flex: 1;
+}
+.today-schedule-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: calc(13px * var(--font-zoom, 1));
+  font-weight: 700;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
 .reminder-hint {
@@ -655,6 +682,50 @@ header.top p.subtitle {
 }
 
 .time-add-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.day-selector { display: flex; gap: 4px; margin-bottom: 8px; }
+.day-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-sub);
+  font-size: calc(12.5px * var(--font-zoom, 1));
+  font-weight: 700;
+  cursor: pointer;
+}
+.day-btn.active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.assign-row {
+  font-size: calc(13.5px * var(--font-zoom, 1));
+  color: var(--text-sub);
+  margin-bottom: 8px;
+}
+.assign-row select {
+  font-size: calc(13.5px * var(--font-zoom, 1));
+  padding: 5px 7px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  margin-left: 4px;
+}
+
+.assigned-badge {
+  display: inline-block;
+  font-size: calc(12px * var(--font-zoom, 1));
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary-light);
+  color: var(--primary-dark);
+  margin-left: 6px;
+}
 
 .time-input {
   border: 1px solid var(--border);

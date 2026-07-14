@@ -43,6 +43,8 @@
     fontDecreaseBtn: document.getElementById("font-decrease-btn"),
     fontIncreaseBtn: document.getElementById("font-increase-btn"),
     voiceSearchBtn: document.getElementById("voice-search-btn"),
+    voiceSearchHint: document.getElementById("voice-search-hint"),
+    voiceSearchStatus: document.getElementById("voice-search-status"),
     printBtn: document.getElementById("print-btn"),
     printDate: document.getElementById("print-date"),
     reminderList: document.getElementById("reminder-list"),
@@ -934,6 +936,8 @@
   // 이 브라우저 탭이 열려 있을 때만 알림이 울린다(백그라운드 푸시 서버가 없는
   // 정적 사이트의 한계). 그래도 localStorage에 저장해두면 다시 열었을 때 유지된다.
   const REMINDER_KEY = "dur_reminders";
+  const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+  const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
   let reminders = loadReminders();
   const remindersFiredToday = new Set(); // `${reminderId}_${time}_${YYYY-MM-DD}` 중복 알림 방지
 
@@ -951,6 +955,11 @@
     if (window.FamilySync) window.FamilySync.pushReminders(reminders);
   }
 
+  // days가 없거나 비어있으면 "매일"로 취급한다(기존에 만든 알림과의 호환용).
+  function getReminderDays(reminder) {
+    return reminder.days && reminder.days.length ? reminder.days : ALL_DAYS;
+  }
+
   function addReminder(label) {
     if (!assertEditable()) return;
     if (reminders.some((r) => r.label === label)) {
@@ -960,7 +969,7 @@
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
-    reminders.push({ id: "r" + Date.now(), label, times: [] });
+    reminders.push({ id: "r" + Date.now(), label, times: [], days: [] });
     saveReminders();
     renderReminders();
   }
@@ -988,7 +997,69 @@
     renderReminders();
   }
 
+  // 특정 요일만 복용하는 약(예: 월·수·금 영양제)을 위한 요일 선택. 전부 해제하면
+  // "매일"로 되돌린다(빈 배열로 두면 알림이 하나도 안 울리는 혼란을 막기 위함).
+  function toggleReminderDay(id, day) {
+    if (!assertEditable()) return;
+    const reminder = reminders.find((r) => r.id === id);
+    if (!reminder) return;
+    const current = getReminderDays(reminder);
+    let next = current.includes(day) ? current.filter((d) => d !== day) : [...current, day].sort();
+    if (next.length === 0) next = [...ALL_DAYS];
+    reminder.days = next;
+    saveReminders();
+    renderReminders();
+  }
+
+  // ---------- 복용 완료 체크 ----------
+  // "오늘 먹을 약" 일정에서 각 시간대를 실제로 복용했는지 체크하는 기록. 그룹에
+  // 연결돼 있으면 Firestore로도 동기화된다 - 예를 들어 할머니가 체크하면 손녀
+  // 폰에서도 "드셨음"이 보이도록(보기전용 멤버도 이 체크만은 할 수 있게 보안
+  // 규칙에서 허용해뒀다). 그룹이 없으면 이 브라우저에만 저장된다.
+  const TAKEN_KEY = "dur_taken_doses";
+  let takenDoses = loadTakenDoses();
+
+  function loadTakenDoses() {
+    try {
+      const raw = localStorage.getItem(TAKEN_KEY);
+      return new Set(raw ? JSON.parse(raw) : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function saveTakenDoses() {
+    // 기록이 무한정 쌓이지 않도록 최근 3일치 키만 남긴다.
+    const recentDates = [];
+    const now = new Date();
+    for (let i = 0; i < 3; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      recentDates.push(d.toISOString().slice(0, 10));
+    }
+    takenDoses = new Set([...takenDoses].filter((key) => recentDates.some((d) => key.endsWith(d))));
+    const arr = [...takenDoses];
+    localStorage.setItem(TAKEN_KEY, JSON.stringify(arr));
+    if (window.FamilySync) window.FamilySync.pushTakenDoses(arr);
+  }
+
+  function toggleTaken(fireKey, isTaken) {
+    if (isTaken) takenDoses.add(fireKey);
+    else takenDoses.delete(fireKey);
+    saveTakenDoses();
+    renderTodaySchedule();
+  }
+
+  // 그룹에 나 말고 다른 멤버가 있을 때만 "알림 받을 사람" 선택지를 보여준다
+  // (혼자일 땐 굳이 고를 필요가 없으니 평소엔 안 보이게).
+  function getAssignableMembers() {
+    if (!window.FamilySync || !window.FamilySync.isConnected()) return null;
+    const members = window.FamilySync.getActiveGroupMembers();
+    return members && members.length > 1 ? members : null;
+  }
+
   function renderReminders() {
+    const members = getAssignableMembers();
     el.reminderEmptyMsg.style.display = reminders.length ? "none" : "block";
     el.reminderList.innerHTML = reminders
       .map((r) => {
@@ -997,10 +1068,29 @@
             (t) => `<span class="time-chip">${t} <button class="time-remove-btn" data-id="${r.id}" data-time="${t}" aria-label="시간 삭제">×</button></span>`
           )
           .join("");
+        const activeDays = getReminderDays(r);
+        const dayBtns = DAY_LABELS.map(
+          (label, day) => `
+          <button type="button" class="day-btn ${activeDays.includes(day) ? "active" : ""}" data-id="${r.id}" data-day="${day}">${label}</button>`
+        ).join("");
+        const assignHtml = members
+          ? `<div class="assign-row">
+               <label>🔔 알림 받을 사람:
+                 <select class="assign-select" data-id="${r.id}">
+                   <option value="">전체(그룹원 모두)</option>
+                   ${members
+                     .map((m) => `<option value="${escapeHtml(m.uid)}" ${r.assignedTo === m.uid ? "selected" : ""}>${escapeHtml(m.displayName)}</option>`)
+                     .join("")}
+                 </select>
+               </label>
+             </div>`
+          : "";
         return `
         <li class="reminder-item">
           <div class="info">
             <div class="name">${escapeHtml(r.label)}</div>
+            <div class="day-selector" title="복용 요일 (전부 선택 = 매일)">${dayBtns}</div>
+            ${assignHtml}
             <div class="time-chips">${chips || '<span class="basket-empty" style="padding:0;">아직 시간이 없습니다</span>'}</div>
             <div class="time-add-row">
               <input type="time" class="time-input" id="time-input-${r.id}" />
@@ -1022,6 +1112,16 @@
         if (input.value) addReminderTime(id, input.value);
       });
     });
+    el.reminderList.querySelectorAll(".day-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        toggleReminderDay(btn.getAttribute("data-id"), Number(btn.getAttribute("data-day")));
+      });
+    });
+    el.reminderList.querySelectorAll(".assign-select").forEach((select) => {
+      select.addEventListener("change", () => {
+        assignReminderTo(select.getAttribute("data-id"), select.value || null);
+      });
+    });
     el.reminderList.querySelectorAll(".reminder-item > .remove-btn").forEach((btn) => {
       btn.addEventListener("click", () => removeReminder(btn.getAttribute("data-id")));
     });
@@ -1029,12 +1129,30 @@
     renderTodaySchedule();
   }
 
-  // 등록된 모든 알림 시간을 하루 일정표처럼 시간순으로 모아 보여준다.
-  // 이미 지난 시간은 흐리게 표시해 "먹었는지 아닌지" 한눈에 훑을 수 있게 한다.
+  // 알림을 그룹원 특정 한 명에게만 배정한다(예: 손녀가 할머니 몫 알림을 설정하되,
+  // 정작 알람은 할머니 폰에만 울리고 손녀 폰엔 안 울리게). 배정 안 하면(null) 그룹의
+  // 모든 사람 폰에서 울린다 - 예: "다같이 챙겨 먹는 영양제".
+  function assignReminderTo(id, uid) {
+    if (!assertEditable()) return;
+    const reminder = reminders.find((r) => r.id === id);
+    if (!reminder) return;
+    reminder.assignedTo = uid || null;
+    saveReminders();
+    renderReminders();
+  }
+
+  // 등록된 알림 중 "오늘 요일"에 해당하는 시간만 하루 일정표로 모아 보여준다.
+  // 복용 완료 체크를 하면 시간이 지나지 않았어도 완료로 표시되고, 알림도 다시 안 울린다.
   function renderTodaySchedule() {
+    const now = new Date();
+    const todayDow = now.getDay();
+    const todayStr = now.toISOString().slice(0, 10);
+    const members = getAssignableMembers();
+
     const flat = [];
     for (const r of reminders) {
-      for (const t of r.times) flat.push({ time: t, label: r.label });
+      if (!getReminderDays(r).includes(todayDow)) continue;
+      for (const t of r.times) flat.push({ time: t, label: r.label, reminderId: r.id, assignedTo: r.assignedTo });
     }
     if (!flat.length) {
       el.todayScheduleWrap.hidden = true;
@@ -1042,20 +1160,31 @@
     }
     flat.sort((a, b) => a.time.localeCompare(b.time));
 
-    const now = new Date();
     const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
     el.todayScheduleWrap.hidden = false;
     el.todayScheduleList.innerHTML = flat
       .map((entry) => {
+        const fireKey = `${entry.reminderId}_${entry.time}_${todayStr}`;
+        const taken = takenDoses.has(fireKey);
         const isPast = entry.time <= currentTime;
+        const assignedMember = entry.assignedTo && members ? members.find((m) => m.uid === entry.assignedTo) : null;
+        const assignedBadge = assignedMember ? ` <span class="assigned-badge">👤 ${escapeHtml(assignedMember.displayName)}</span>` : "";
         return `
-        <li class="today-schedule-item ${isPast ? "past" : "upcoming"}">
-          <span class="today-schedule-time">${isPast ? "✅" : "⏰"} ${entry.time}</span>
-          <span class="today-schedule-name">${escapeHtml(entry.label)}</span>
+        <li class="today-schedule-item ${taken ? "taken" : isPast ? "past" : "upcoming"}">
+          <span class="today-schedule-time">${taken ? "✅" : isPast ? "⏰" : "🕒"} ${entry.time}</span>
+          <span class="today-schedule-name">${escapeHtml(entry.label)}${assignedBadge}</span>
+          <label class="today-schedule-check">
+            <input type="checkbox" class="taken-check" data-key="${fireKey}" ${taken ? "checked" : ""} />
+            복용함
+          </label>
         </li>`;
       })
       .join("");
+
+    el.todayScheduleList.querySelectorAll(".taken-check").forEach((cb) => {
+      cb.addEventListener("change", () => toggleTaken(cb.getAttribute("data-key"), cb.checked));
+    });
   }
 
   function checkReminders() {
@@ -1065,12 +1194,19 @@
     const mm = String(now.getMinutes()).padStart(2, "0");
     const currentTime = `${hh}:${mm}`;
     const today = now.toISOString().slice(0, 10);
+    const todayDow = now.getDay();
+    const myUid = window.FamilySync ? window.FamilySync.getCurrentUserId() : null;
 
     for (const r of reminders) {
+      // 다른 그룹원에게 배정된 알림은 이 폰에서는 울리지 않는다(예: 손녀가 설정한
+      // 할머니 몫 알림이 손녀 폰에서는 안 울리고 할머니 폰에서만 울리도록).
+      if (r.assignedTo && myUid && r.assignedTo !== myUid) continue;
+      if (!getReminderDays(r).includes(todayDow)) continue;
       if (!r.times.includes(currentTime)) continue;
       const fireKey = `${r.id}_${currentTime}_${today}`;
       if (remindersFiredToday.has(fireKey)) continue;
       remindersFiredToday.add(fireKey);
+      if (takenDoses.has(fireKey)) continue; // 미리 복용완료로 체크해뒀다면 알림을 생략한다
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification("복약 알림", { body: `${r.label} 복용 시간입니다.`, icon: "icons/icon-192.png" });
       }
@@ -1193,9 +1329,21 @@
   });
 
   // ---------- 음성 검색 ----------
+  // 브라우저 호환성: 이 API는 Chrome/Edge(데스크톱·안드로이드)에서만 되고, iOS Safari는
+  // 아예 지원하지 않는다 - 그런 브라우저에서는 버튼 자체가 hidden 상태로 유지된다.
+  const VOICE_ERROR_MESSAGES = {
+    "no-speech": "음성이 들리지 않았어요. 🎤 버튼을 다시 누르고 또렷하게 말씀해주세요.",
+    "audio-capture": "마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.",
+    "not-allowed": "마이크 권한이 꺼져 있어요. 브라우저 설정에서 마이크 권한을 허용해주세요.",
+    "service-not-allowed": "마이크 권한이 꺼져 있어요. 브라우저 설정에서 마이크 권한을 허용해주세요.",
+    network: "네트워크 문제로 음성 인식을 사용할 수 없습니다. 잠시 후 다시 시도해주세요.",
+    aborted: "",
+  };
+
   const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (SpeechRecognitionCtor) {
     el.voiceSearchBtn.hidden = false;
+    el.voiceSearchHint.hidden = false;
     const recognizer = new SpeechRecognitionCtor();
     recognizer.lang = "ko-KR";
     recognizer.continuous = false;
@@ -1203,15 +1351,27 @@
 
     let listening = false;
 
+    function showVoiceStatus(message) {
+      if (!message) {
+        el.voiceSearchStatus.hidden = true;
+        el.voiceSearchStatus.textContent = "";
+        return;
+      }
+      el.voiceSearchStatus.hidden = false;
+      el.voiceSearchStatus.textContent = message;
+    }
+
     el.voiceSearchBtn.addEventListener("click", () => {
       if (listening) {
         recognizer.stop();
         return;
       }
       try {
+        showVoiceStatus("🎤 듣고 있어요... 약 이름을 말씀해주세요.");
         recognizer.start();
       } catch (err) {
         console.error("음성 인식 시작 실패", err);
+        showVoiceStatus("음성 인식을 시작하지 못했습니다. 잠시 후 다시 시도해주세요.");
       }
     });
 
@@ -1225,9 +1385,11 @@
     });
     recognizer.addEventListener("error", (e) => {
       console.error("음성 인식 오류", e.error);
+      showVoiceStatus(VOICE_ERROR_MESSAGES[e.error] || "음성 인식 중 문제가 발생했습니다. 다시 시도해주세요.");
     });
     recognizer.addEventListener("result", (e) => {
       const transcript = e.results[0][0].transcript.trim();
+      showVoiceStatus(`✅ "${transcript}"(으)로 검색합니다.`);
       el.searchInput.value = transcript;
       runSearch();
     });
@@ -1250,6 +1412,45 @@
     el.ocrPanel.hidden = true;
   });
 
+  // 요즘 폰 카메라 사진은 원본이 수 MB(수천만 화소)라서 그대로 OCR에 넣으면 체감상
+  // "멈춘 것처럼" 느껴질 만큼 오래 걸릴 수 있다. 글자를 읽는 데는 그 정도 해상도가
+  // 필요 없으므로, 긴 변 기준 최대 1600px로 줄여서 속도를 크게 개선한다.
+  function downscaleImage(file, maxDim) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let { width, height } = img;
+        if (width <= maxDim && height <= maxDim) {
+          resolve(file);
+          return;
+        }
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => resolve(blob || file), "image/jpeg", 0.9);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file); // 축소에 실패해도 원본으로라도 계속 진행
+      };
+      img.src = url;
+    });
+  }
+
+  const OCR_STATUS_LABELS = {
+    "loading tesseract core": "OCR 엔진을 불러오는 중",
+    "initializing tesseract": "OCR 엔진을 준비하는 중",
+    "loading language traineddata": "언어 데이터를 불러오는 중 (처음 한 번만 시간이 걸려요)",
+    "initializing api": "준비하는 중",
+    "recognizing text": "글자를 읽는 중",
+  };
+
   el.ocrFileInput.addEventListener("change", async (e) => {
     const file = e.target.files[0];
     e.target.value = "";
@@ -1258,10 +1459,19 @@
     el.ocrPanel.hidden = false;
     el.ocrResults.innerHTML = "";
     el.ocrAddBtn.style.display = "none";
-    el.ocrStatus.textContent = "사진을 분석하고 있습니다... (처음 실행 시 시간이 좀 걸릴 수 있어요)";
+    el.ocrStatus.textContent = "사진을 준비하는 중...";
 
     try {
-      const { data } = await window.Tesseract.recognize(file, "kor+eng");
+      const processedImage = await downscaleImage(file, 1600);
+      const { data } = await window.Tesseract.recognize(processedImage, "kor+eng", {
+        logger: (m) => {
+          if (m.status === "recognizing text" && typeof m.progress === "number") {
+            el.ocrStatus.textContent = `글자를 읽는 중입니다... ${Math.round(m.progress * 100)}%`;
+          } else if (m.status) {
+            el.ocrStatus.textContent = `${OCR_STATUS_LABELS[m.status] || m.status}...`;
+          }
+        },
+      });
       const matches = matchOcrTextToProducts(data.text || "");
       renderOcrResults(matches);
     } catch (err) {
@@ -1348,6 +1558,11 @@
       reminders = data.reminders;
       saveReminders();
       renderReminders();
+    }
+    if (Array.isArray(data.takenDoses)) {
+      takenDoses = new Set(data.takenDoses);
+      saveTakenDoses();
+      renderTodaySchedule();
     }
   });
 
