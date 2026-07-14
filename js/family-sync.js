@@ -149,13 +149,49 @@
     showNoGroup();
   });
 
+  // app.js가 localStorage에 저장해둔 현재 로컬 바구니/알림을 읽는다(직접 참조하지
+  // 않고 같은 localStorage 키를 공유해서 파일 간 결합도를 낮춘다).
+  function getLocalSnapshot() {
+    let basket = [];
+    let reminders = [];
+    try {
+      basket = JSON.parse(localStorage.getItem("dur_basket") || "[]");
+    } catch {
+      /* 무시 */
+    }
+    try {
+      reminders = JSON.parse(localStorage.getItem("dur_reminders") || "[]");
+    } catch {
+      /* 무시 */
+    }
+    return { basket, reminders };
+  }
+
   function connectToFamily(familyId) {
     state.familyId = familyId;
     showGroup(familyId);
     if (state.unsubscribe) state.unsubscribe();
+
+    let isFirstSnapshot = true;
     state.unsubscribe = db.collection("families").doc(familyId).onSnapshot((doc) => {
       if (!doc.exists) return;
       const data = doc.data();
+
+      if (isFirstSnapshot) {
+        isFirstSnapshot = false;
+        // 방금 연결된 시점: 이 기기에 이미 담겨있던 로컬 데이터가 있는데 원격은
+        // 비어있다면(예: 막 만든 새 그룹), 빈 원격으로 로컬을 덮어쓰는 대신
+        // 로컬 걸 원격에 올린다. 그래야 "연결 직후 바로 약을 담았는데 사라지는"
+        // 경쟁 상태를 피할 수 있다.
+        const local = getLocalSnapshot();
+        const localHasData = (local.basket && local.basket.length) || (local.reminders && local.reminders.length);
+        const remoteEmpty = (!data.basket || !data.basket.length) && (!data.reminders || !data.reminders.length);
+        if (localHasData && remoteEmpty) {
+          db.collection("families").doc(familyId).update({ basket: local.basket, reminders: local.reminders });
+          return;
+        }
+      }
+
       state.applyingRemote = true;
       window.dispatchEvent(new CustomEvent("family-data-updated", { detail: data }));
       state.applyingRemote = false;
