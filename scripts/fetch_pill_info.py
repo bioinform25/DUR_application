@@ -90,6 +90,7 @@ def to_pill_record(item: dict) -> dict:
         "chart": item.get("CHART") or None,
         "image_url": item.get("ITEM_IMAGE") or None,
         "form": item.get("FORM_CODE_NAME") or None,
+        "class_name": item.get("CLASS_NAME") or None,  # 약효분류명(예: "해열진통소염제") - 바구니 정렬용
     }
 
 

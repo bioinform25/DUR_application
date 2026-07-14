@@ -34,6 +34,7 @@
     basketEmptyMsg: document.getElementById("basket-empty-msg"),
     basketCount: document.getElementById("basket-count"),
     clearBasketBtn: document.getElementById("clear-basket-btn"),
+    basketSortSelect: document.getElementById("basket-sort-select"),
     results: document.getElementById("results"),
     modeLayBtn: document.getElementById("mode-lay-btn"),
     modeExpertBtn: document.getElementById("mode-expert-btn"),
@@ -609,6 +610,8 @@
 
   function removeFromBasket(uid) {
     if (!assertEditable()) return;
+    const item = state.basket.find((b) => b.uid === uid);
+    if (item && !confirm(`정말로 "${item.label}"을(를) 바구니에서 삭제하시겠습니까?`)) return;
     state.basket = state.basket.filter((b) => b.uid !== uid);
     saveBasket();
     renderBasket();
@@ -720,6 +723,8 @@
 
   el.clearBasketBtn.addEventListener("click", () => {
     if (!assertEditable()) return;
+    if (!state.basket.length) return;
+    if (!confirm(`바구니에 담긴 약 ${state.basket.length}개를 전부 삭제하시겠습니까?`)) return;
     state.basket = [];
     saveBasket();
     renderBasket();
@@ -751,14 +756,69 @@
     return { current: product, cheapest, savings: product.price - cheapest.price };
   }
 
+  // ---------- 바구니 정렬/순서 변경 ----------
+  // "담은 순서"일 때만 사용자가 위/아래 버튼으로 직접 순서를 바꿀 수 있다(그 외
+  // 정렬 기준은 계산해서 보여주기만 하고 원래 배열 순서는 안 바꾼다 - 정렬 기준을
+  // "담은 순서"로 되돌리면 언제든 원래 순서를 다시 볼 수 있게 하기 위함).
+  const BASKET_SORT_KEY = "dur_basket_sort";
+  let basketSortMode = localStorage.getItem(BASKET_SORT_KEY) || "manual";
+  el.basketSortSelect.value = basketSortMode;
+
+  function getIngredientClassName(basketItem) {
+    const pill = basketItem.kind === "product" ? state.pillInfoByCode[basketItem.code] : null;
+    return (pill && pill.class_name) || null;
+  }
+
+  // 화면에 보여줄 순서를 계산한다. 각 항목에 실제 state.basket 배열 위치(realIndex)를
+  // 함께 담아둬서, "담은 순서" 모드의 위/아래 이동 버튼이 정확한 위치를 알 수 있게 한다.
+  function getSortedBasketEntries() {
+    const entries = state.basket.map((item, realIndex) => ({ item, realIndex }));
+    if (basketSortMode === "name") {
+      entries.sort((a, b) => a.item.label.localeCompare(b.item.label, "ko"));
+    } else if (basketSortMode === "ingredient") {
+      entries.sort((a, b) => {
+        const an = (a.item.ingredientKeys && a.item.ingredientKeys[0]) || "";
+        const bn = (b.item.ingredientKeys && b.item.ingredientKeys[0]) || "";
+        return an.localeCompare(bn);
+      });
+    } else if (basketSortMode === "class") {
+      entries.sort((a, b) => {
+        const ac = getIngredientClassName(a.item) || "￿"; // 분류 정보 없는 건 맨 뒤로
+        const bc = getIngredientClassName(b.item) || "￿";
+        return ac.localeCompare(bc, "ko");
+      });
+    }
+    return entries;
+  }
+
+  function moveBasketItem(realIndex, direction) {
+    if (!assertEditable()) return;
+    const newIndex = realIndex + direction;
+    if (newIndex < 0 || newIndex >= state.basket.length) return;
+    const [item] = state.basket.splice(realIndex, 1);
+    state.basket.splice(newIndex, 0, item);
+    saveBasket();
+    renderBasket();
+    renderResults();
+  }
+
+  el.basketSortSelect.addEventListener("change", () => {
+    basketSortMode = el.basketSortSelect.value;
+    localStorage.setItem(BASKET_SORT_KEY, basketSortMode);
+    renderBasket();
+  });
+
   function renderBasket() {
     el.basketEmptyMsg.style.display = state.basket.length ? "none" : "block";
     el.basketCount.textContent = state.basket.length ? `담은 약 ${state.basket.length}개` : "";
     el.basketReadonlyNote.hidden = !state.familyReadOnly;
     el.clearBasketBtn.hidden = state.familyReadOnly;
 
-    el.basketList.innerHTML = state.basket
-      .map((b) => {
+    const sortedEntries = getSortedBasketEntries();
+    const isManualSort = basketSortMode === "manual";
+
+    el.basketList.innerHTML = sortedEntries
+      .map(({ item: b, realIndex }) => {
         const healthLink = healthKrLink(b.healthSearchName);
         const alt = b.kind === "product" ? findCheaperAlternative(b.code) : null;
         const altHtml = alt
@@ -830,6 +890,14 @@
             ${partnersHtml}
           </div>
           <div class="actions">
+            ${
+              isManualSort && !state.familyReadOnly
+                ? `<div class="move-btn-col no-print">
+                     <button class="move-btn" title="위로 이동" data-index="${realIndex}" data-dir="-1" ${realIndex === 0 ? "disabled" : ""}>▲</button>
+                     <button class="move-btn" title="아래로 이동" data-index="${realIndex}" data-dir="1" ${realIndex === state.basket.length - 1 ? "disabled" : ""}>▼</button>
+                   </div>`
+                : ""
+            }
             <a class="link-btn health-link" title="약학정보원에서 상세정보 보기" href="${healthLink}" target="_blank" rel="noopener">약학정보원</a>
             ${state.familyReadOnly ? "" : `<button class="link-btn reminder-add-btn no-print" title="복약 알림 등록" data-label="${escapeHtml(b.label)}">⏰</button>`}
             ${state.familyReadOnly ? "" : `<button class="remove-btn" title="바구니에서 빼기" data-uid="${b.uid}">×</button>`}
@@ -838,6 +906,11 @@
       })
       .join("");
 
+    el.basketList.querySelectorAll(".move-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        moveBasketItem(Number(btn.getAttribute("data-index")), Number(btn.getAttribute("data-dir")));
+      });
+    });
     el.basketList.querySelectorAll(".remove-btn").forEach((btn) => {
       btn.addEventListener("click", () => removeFromBasket(btn.getAttribute("data-uid")));
     });
