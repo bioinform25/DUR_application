@@ -7,7 +7,7 @@
  * 캐시 버전을 올리면(CACHE_VERSION) 이전 캐시가 자동 정리된다. 앱 셸 파일이
  * 바뀌었는데 사용자에게 안 보인다면 이 값을 올릴 것.
  */
-const CACHE_VERSION = "v33";
+const CACHE_VERSION = "v34";
 const SHELL_CACHE = `dur-shell-${CACHE_VERSION}`;
 const DATA_CACHE = `dur-data-${CACHE_VERSION}`;
 

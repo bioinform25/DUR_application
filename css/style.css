@@ -4,9 +4,12 @@
   --text: #1f2937;
   --text-sub: #4b5563;
   --border: #dbe3ec;
-  --primary: #2563eb;
-  --primary-dark: #1d4ed8;
-  --primary-light: #eaf1ff;
+  /* 로고의 민트→네이비 그라데이션에서 뽑은 색상(icons/logo_source.png 실측) */
+  --primary: #2c6382;
+  --primary-dark: #1e4a6b;
+  --primary-light: #e6f1f2;
+  --brand-teal: #4ea09b;
+  --brand-gradient: linear-gradient(135deg, var(--brand-teal) 0%, var(--primary) 55%, var(--primary-dark) 100%);
   --danger-bg: #fdecec;
   --danger-border: #e11d2f;
   --danger-text: #7f1120;
@@ -65,7 +68,11 @@ header.top {
 header.top h1 {
   font-size: calc(26px * var(--font-zoom, 1));
   margin: 0 0 4px;
-  color: var(--primary-dark);
+  font-weight: 800;
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 header.top p.subtitle {
@@ -1042,7 +1049,7 @@ body.mode-expert .lay-only { display: none; }
     --text: #e6edf5;
     --text-sub: #9aa7b6;
     --border: #2b3644;
-    --primary-light: #1c2a44;
+    --primary-light: #16323d;
   }
   .link-btn { background: #202834; }
   #search-input { background: #141a22; color: var(--text); }
@@ -1056,7 +1063,7 @@ body.mode-expert .lay-only { display: none; }
   --text: #e6edf5;
   --text-sub: #9aa7b6;
   --border: #2b3644;
-  --primary-light: #1c2a44;
+  --primary-light: #16323d;
 }
 :root[data-theme="dark"] .link-btn { background: #202834; }
 :root[data-theme="dark"] #search-input { background: #141a22; color: var(--text); }
@@ -1067,7 +1074,7 @@ body.mode-expert .lay-only { display: none; }
   --text: #1f2937;
   --text-sub: #4b5563;
   --border: #dbe3ec;
-  --primary-light: #eaf1ff;
+  --primary-light: #e6f1f2;
 }
 :root[data-theme="light"] .link-btn { background: #fff; }
 :root[data-theme="light"] #search-input { background: #fff; color: var(--text); }
