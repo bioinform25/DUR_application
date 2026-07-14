@@ -38,6 +38,7 @@ pip install -r scripts/requirements.txt
 python scripts/fetch_price_list.py     # data/raw/latest.xlsx 다운로드
 python scripts/parse_price_list.py     # data/drugs.json 생성
 python scripts/fetch_dur_rules.py      # data/dur_rules.json 생성 (DUR_API_KEY 없으면 목업)
+python scripts/fetch_pill_info.py      # data/pill_info.json 생성 (모양/색깔/사진, 키 없으면 빈 결과)
 ```
 
 ## 실제 병용금기 데이터(DUR API) 연동
@@ -104,9 +105,14 @@ Restart-Service "<러너 서비스 이름>"
 
 ## 알려진 제한사항 (다음 단계 로드맵)
 
-- **알약 사진 식별 기능은 포함하지 않았습니다.** 대신 검색창 아래에 약학정보원 알약 식별
-  서비스로 이동하는 링크를 두었습니다. 실제 식별 기능을 넣으려면 알약 이미지 DB와 이미지
-  인식 모델이 필요한 별도 프로젝트가 됩니다.
+- **알약 모양·색깔·사진**: 식약처 의약품안전나라 "의약품 낱알식별정보" API
+  (`getMdcinGrnIdntfcInfoList03`, `scripts/fetch_pill_info.py`)에서 가져와 `data/pill_info.json`에
+  저장합니다. 응답의 `EDI_CODE`가 HIRA 약제급여목록표의 보험코드(=`drugs.json`의
+  `product_code`)와 동일해 이름 기반 매칭 없이 바로 조인할 수 있습니다(전체 품목 중 약 73%
+  매칭 확인, 나머지는 오래되었거나 유통중단된 품목으로 추정). 바구니에 담긴 약 옆에 실제
+  사진을, "1. 복용 중인 약 검색해서 담기"에는 모양·색깔로 찾는 필터를 제공합니다. 사진이
+  없는 품목은 모양·색깔 텍스트만 표시하거나(둘 다 없으면 아이콘만) 표시합니다. 이미지 진짜
+  식별(카메라로 촬영해서 자동 인식)은 별도의 이미지 인식 모델이 필요한 후속 과제입니다.
 - **외부 링크는 약학정보원(health.kr)만 사용합니다.** 킴스온라인·드럭인포는 안정적인 딥링크를
   확인하지 못해 제외했습니다. health.kr 검색은 급여목록표의 전체 상품명(용량+괄호 성분명 포함)
   그대로 넘기면 실패하는 경우가 많아(예: "프라닥사캡슐150밀리그램(다비가트란...)" 검색 실패),

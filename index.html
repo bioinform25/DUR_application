@@ -67,9 +67,28 @@
       </div>
       <div id="suggestions"></div>
     </div>
-    <p class="search-hint">약 이름이 잘 기억나지 않으면
-      <a href="https://www.health.kr/searchIdentity/search.asp" target="_blank" rel="noopener">약학정보원 알약 식별 서비스</a>에서 모양·색깔·각인으로 찾아보세요.
+    <p class="search-hint">약 이름이 잘 기억나지 않으면 아래에서 모양·색깔로 찾아보거나,
+      <a href="https://www.health.kr/searchIdentity/search.asp" target="_blank" rel="noopener">약학정보원 알약 식별 서비스</a>를 이용해보세요.
     </p>
+
+    <div class="pill-finder-row">
+      <button type="button" id="pill-finder-btn" class="clear-btn">🔍 모양·색깔로 찾기</button>
+    </div>
+    <div id="pill-finder-panel" class="pill-finder-panel" hidden>
+      <div class="pill-finder-controls">
+        <label class="profile-field">
+          <span>모양</span>
+          <select id="pill-finder-shape"><option value="">전체</option></select>
+        </label>
+        <label class="profile-field">
+          <span>색깔</span>
+          <select id="pill-finder-color"><option value="">전체</option></select>
+        </label>
+        <button type="button" id="pill-finder-search-btn" class="print-btn">찾기</button>
+      </div>
+      <p class="pill-finder-hint" id="pill-finder-hint"></p>
+      <ul id="pill-finder-results" class="pill-finder-results"></ul>
+    </div>
 
     <div class="ocr-row">
       <button type="button" id="ocr-btn" class="clear-btn ocr-btn" hidden>📷 약봉투 사진으로 한 번에 등록</button>

@@ -5,6 +5,7 @@
     drugsData: null,
     rulesData: null,
     productsByCode: {}, // product_code -> 제품 상세 (저렴한 대체약 비교용)
+    pillInfoByCode: {}, // product_code(=EDI_CODE) -> 알약 모양/색깔/사진 (식약처 낱알식별정보)
     ingredientToGroups: {}, // ingredient_key -> 효능군 이름 목록 (효능군중복 판정용)
     suggestions: [], // 검색 대상 통합 인덱스
     basket: [],       // 담은 약 목록
@@ -46,6 +47,13 @@
     profileAgeRange: document.getElementById("profile-age-range"),
     profileSex: document.getElementById("profile-sex"),
     profileClearBtn: document.getElementById("profile-clear-btn"),
+    pillFinderBtn: document.getElementById("pill-finder-btn"),
+    pillFinderPanel: document.getElementById("pill-finder-panel"),
+    pillFinderShape: document.getElementById("pill-finder-shape"),
+    pillFinderColor: document.getElementById("pill-finder-color"),
+    pillFinderSearchBtn: document.getElementById("pill-finder-search-btn"),
+    pillFinderHint: document.getElementById("pill-finder-hint"),
+    pillFinderResults: document.getElementById("pill-finder-results"),
   };
 
   // ---------- 데이터 로딩 ----------
@@ -61,6 +69,20 @@
     for (const p of state.drugsData.products) {
       state.productsByCode[p.product_code] = p;
     }
+
+    // 알약 모양·색깔·사진 정보(선택 데이터) - 식약처 낱알식별정보 API 활용신청이
+    // 안 된 환경이거나 파일이 없어도 앱의 핵심 기능에는 영향이 없어야 하므로 조용히 넘어간다.
+    state.pillInfoByCode = {};
+    try {
+      const pillRes = await fetch("data/pill_info.json");
+      if (pillRes.ok) {
+        const pillData = await pillRes.json();
+        state.pillInfoByCode = pillData.pills || {};
+      }
+    } catch {
+      state.pillInfoByCode = {};
+    }
+    buildPillFinderOptions();
 
     // 효능군중복: "효능군 -> 소속 성분키 목록"을 "성분키 -> 소속 효능군 목록"으로
     // 뒤집어둬야, 바구니 두 약의 성분키가 같은 효능군을 공유하는지 빠르게 확인 가능
@@ -135,6 +157,93 @@
     if (!key) return key;
     return key.charAt(0).toUpperCase() + key.slice(1);
   }
+
+  // ---------- 모양·색깔로 찾기 (식약처 낱알식별정보) ----------
+  // 모양/색깔 값 목록을 하드코딩하지 않고, 실제 로드된 데이터에서 등장하는 값만 뽑아
+  // 드롭다운을 채운다 - 원본 API의 표기가 바뀌어도 항상 실제 데이터와 일치한다.
+  function buildPillFinderOptions() {
+    const shapes = new Set();
+    const colors = new Set();
+    for (const code in state.pillInfoByCode) {
+      const pill = state.pillInfoByCode[code];
+      if (pill.shape) shapes.add(pill.shape);
+      if (pill.color1) colors.add(pill.color1);
+      if (pill.color2) colors.add(pill.color2);
+    }
+    const fillSelect = (select, values) => {
+      const sorted = [...values].sort((a, b) => a.localeCompare(b, "ko"));
+      select.innerHTML = '<option value="">전체</option>' + sorted.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join("");
+    };
+    fillSelect(el.pillFinderShape, shapes);
+    fillSelect(el.pillFinderColor, colors);
+  }
+
+  const MAX_PILL_FINDER_RESULTS = 30;
+
+  function findProductsByAppearance(shape, color) {
+    if (!shape && !color) return [];
+    const results = [];
+    for (const p of state.drugsData.products) {
+      const pill = state.pillInfoByCode[p.product_code];
+      if (!pill) continue;
+      if (shape && pill.shape !== shape) continue;
+      if (color && pill.color1 !== color && pill.color2 !== color) continue;
+      results.push({ product: p, pill });
+    }
+    return results;
+  }
+
+  function renderPillFinderResults() {
+    const shape = el.pillFinderShape.value;
+    const color = el.pillFinderColor.value;
+    const matches = findProductsByAppearance(shape, color);
+
+    if (!shape && !color) {
+      el.pillFinderHint.textContent = "모양이나 색깔을 하나 이상 골라주세요.";
+      el.pillFinderResults.innerHTML = "";
+      return;
+    }
+    if (matches.length === 0) {
+      el.pillFinderHint.textContent = "해당하는 약을 찾지 못했습니다. 다른 조건으로 시도해보세요.";
+      el.pillFinderResults.innerHTML = "";
+      return;
+    }
+
+    const shown = matches.slice(0, MAX_PILL_FINDER_RESULTS);
+    el.pillFinderHint.textContent =
+      matches.length > shown.length
+        ? `${matches.length.toLocaleString()}건 중 ${shown.length}건만 표시합니다. 색깔도 함께 선택하면 더 좁혀집니다.`
+        : `${matches.length.toLocaleString()}건을 찾았습니다.`;
+
+    el.pillFinderResults.innerHTML = shown
+      .map(({ product, pill }, idx) => {
+        const img = pill.image_url
+          ? `<img src="${escapeHtml(pill.image_url)}" alt="" class="pill-thumb" loading="lazy" onerror="this.style.display='none'" />`
+          : `<span class="pill-thumb pill-thumb-empty" aria-hidden="true">💊</span>`;
+        return `
+        <li class="pill-finder-item" data-idx="${idx}">
+          ${img}
+          <div class="pill-finder-item-info">
+            <div class="name">${escapeHtml(product.product_name_display)}</div>
+            <div class="meta">${escapeHtml(product.company)} · ${escapeHtml(pill.chart || "")}</div>
+          </div>
+          <button type="button" class="link-btn pill-finder-add-btn" data-idx="${idx}">담기</button>
+        </li>`;
+      })
+      .join("");
+
+    el.pillFinderResults.querySelectorAll(".pill-finder-add-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.getAttribute("data-idx"));
+        addToBasket(productSuggestionEntry(shown[idx].product));
+      });
+    });
+  }
+
+  el.pillFinderBtn.addEventListener("click", () => {
+    el.pillFinderPanel.hidden = !el.pillFinderPanel.hidden;
+  });
+  el.pillFinderSearchBtn.addEventListener("click", renderPillFinderResults);
 
   // ---------- 검색 히스토리 ----------
   const SEARCH_HISTORY_KEY = "dur_search_history";
@@ -482,8 +591,16 @@
              </div>`
           : "";
 
+        const pill = b.kind === "product" ? state.pillInfoByCode[b.code] : null;
+        const pillThumb = pill && pill.image_url
+          ? `<img src="${escapeHtml(pill.image_url)}" alt="" class="pill-thumb" loading="lazy" onerror="this.style.display='none'" />`
+          : pill && (pill.shape || pill.color1)
+          ? `<span class="pill-thumb pill-thumb-empty" title="${escapeHtml([pill.shape, pill.color1].filter(Boolean).join(" · "))}" aria-hidden="true">💊</span>`
+          : "";
+
         return `
         <li class="basket-item">
+          ${pillThumb}
           <div class="info">
             <div class="name">${escapeHtml(b.label)}</div>
             <div class="meta">${escapeHtml(b.sub)}</div>
