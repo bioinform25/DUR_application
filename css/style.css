@@ -340,6 +340,18 @@ header.top p.subtitle {
   background: #fbfcff;
 }
 
+.pill-finder-photo-row { margin-bottom: 10px; }
+
+.pill-finder-photo-warning {
+  font-size: calc(13px * var(--font-zoom, 1));
+  color: var(--warn-text);
+  background: var(--warn-bg);
+  border: 1px solid var(--warn-border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 10px;
+}
+
 .pill-finder-controls {
   display: flex;
   flex-wrap: wrap;
@@ -1008,6 +1020,29 @@ header.top p.subtitle {
   margin-top: 24px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
+}
+
+.legal-footer-links {
+  font-size: calc(12.5px * var(--font-zoom, 1));
+  color: var(--text-sub);
+  margin-top: 8px;
+  text-align: center;
+}
+
+.consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: calc(14px * var(--font-zoom, 1));
+  font-weight: 700;
+  margin: 4px 0 14px;
+  cursor: pointer;
+}
+.consent-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .changelog {

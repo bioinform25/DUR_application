@@ -77,7 +77,21 @@
     groupList: document.getElementById("family-group-list"),
     memberPanel: document.getElementById("family-member-panel"),
     memberList: document.getElementById("family-member-list"),
+    consentCheckbox: document.getElementById("family-consent-checkbox"),
   };
+
+  // 공유 기능은 담은 약 목록 등 건강 관련 민감정보를 Firebase에 저장하므로, 로그인
+  // 버튼은 개인정보처리방침/이용약관에 동의 체크를 하기 전까지 비활성화해둔다.
+  // 한 번 동의하면 다음 방문 때는 다시 안 물어보도록 localStorage에 기억해둔다.
+  const CONSENT_KEY = "dur_privacy_consent_v1";
+  if (localStorage.getItem(CONSENT_KEY) === "true") {
+    el.consentCheckbox.checked = true;
+    el.signInBtn.disabled = false;
+  }
+  el.consentCheckbox.addEventListener("change", () => {
+    el.signInBtn.disabled = !el.consentCheckbox.checked;
+    localStorage.setItem(CONSENT_KEY, el.consentCheckbox.checked ? "true" : "false");
+  });
 
   function genFamilyCode() {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 헷갈리는 0/O/1/I 제외

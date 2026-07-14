@@ -68,6 +68,9 @@
     pillFinderSearchBtn: document.getElementById("pill-finder-search-btn"),
     pillFinderHint: document.getElementById("pill-finder-hint"),
     pillFinderResults: document.getElementById("pill-finder-results"),
+    pillPhotoBtn: document.getElementById("pill-photo-btn"),
+    pillPhotoInput: document.getElementById("pill-photo-input"),
+    pillPhotoStatus: document.getElementById("pill-photo-status"),
   };
 
   // ---------- 데이터 로딩 ----------
@@ -258,6 +261,110 @@
     el.pillFinderPanel.hidden = !el.pillFinderPanel.hidden;
   });
   el.pillFinderSearchBtn.addEventListener("click", renderPillFinderResults);
+
+  // ---------- 사진으로 색깔 자동 감지 ----------
+  // 진짜 이미지 인식(어떤 약인지 자동 판별)은 하지 않는다 - 조명·각도가 제각각인
+  // 사용자 사진만으로는 신뢰할 만한 정확도를 낼 수 없고, 잘못 인식하면 실제
+  // 위험으로 이어질 수 있는 영역이라 섣불리 자동판정하지 않는 게 안전하다. 대신
+  // 사진에서 "주요 색상"만 뽑아 색깔 필터를 자동으로 채워주는 보조 기능만 제공하고,
+  // 최종 확인은 반드시 사용자가 후보 사진과 눈으로 비교하도록 안내한다(HTML의 경고 문구).
+  const PILL_COLOR_REFERENCE = [
+    ["하양", [248, 248, 244]],
+    ["노랑", [255, 221, 89]],
+    ["주황", [255, 152, 61]],
+    ["분홍", [255, 178, 194]],
+    ["빨강", [206, 52, 55]],
+    ["갈색", [122, 82, 55]],
+    ["연두", [176, 209, 106]],
+    ["초록", [66, 143, 86]],
+    ["청록", [45, 150, 150]],
+    ["파랑", [66, 116, 191]],
+    ["남색", [36, 56, 112]],
+    ["보라", [141, 96, 171]],
+    ["자주", [156, 58, 112]],
+    ["회색", [151, 151, 151]],
+    ["검정", [35, 35, 35]],
+  ];
+
+  function detectDominantColorName(img) {
+    const canvas = document.createElement("canvas");
+    const maxDim = 100; // 색상 판별엔 고해상도가 필요 없어 축소해서 빠르게 처리
+    const scale = maxDim / Math.max(img.naturalWidth, img.naturalHeight);
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    const votes = new Map(PILL_COLOR_REFERENCE.map(([name]) => [name, 0]));
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      // 흰 배경(테이블/손바닥 등)과 그림자는 알약 자체의 색이 아닐 가능성이 높아 투표에서 제외
+      const isNearWhiteBg = r > 235 && g > 235 && b > 230;
+      const isNearBlackShadow = r < 15 && g < 15 && b < 15;
+      if (isNearWhiteBg || isNearBlackShadow) continue;
+
+      let best = null;
+      let bestDist = Infinity;
+      for (const [name, ref] of PILL_COLOR_REFERENCE) {
+        const dist = (r - ref[0]) ** 2 + (g - ref[1]) ** 2 + (b - ref[2]) ** 2;
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = name;
+        }
+      }
+      if (best) votes.set(best, votes.get(best) + 1);
+    }
+
+    let winner = null;
+    let winnerVotes = 0;
+    for (const [name, count] of votes) {
+      if (count > winnerVotes) {
+        winnerVotes = count;
+        winner = name;
+      }
+    }
+    return winner;
+  }
+
+  el.pillPhotoBtn.addEventListener("click", () => el.pillPhotoInput.click());
+
+  el.pillPhotoInput.addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+
+    el.pillPhotoStatus.textContent = "사진에서 색깔을 분석하는 중...";
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const colorName = detectDominantColorName(img);
+      if (!colorName) {
+        el.pillPhotoStatus.textContent = "색깔을 감지하지 못했습니다. 아래에서 직접 선택해주세요.";
+        return;
+      }
+      // 드롭다운에 정확히 같은 값이 없으면(예: "노랑, 투명" 같은 복합 표기),
+      // 감지한 색으로 시작하는 첫 옵션을 대신 고른다.
+      const options = Array.from(el.pillFinderColor.options);
+      const match = options.find((o) => o.value === colorName) || options.find((o) => o.value.startsWith(colorName));
+      if (match) {
+        el.pillFinderColor.value = match.value;
+        el.pillFinderPanel.hidden = false;
+        renderPillFinderResults();
+        el.pillPhotoStatus.textContent = `📷 사진에서 "${colorName}" 계열 색상을 감지해 자동으로 선택했습니다. 아래 후보를 사진과 꼭 비교해서 확인하세요.`;
+      } else {
+        el.pillPhotoStatus.textContent = `"${colorName}" 계열로 보이지만 목록에 없어 자동 선택하지 못했습니다. 아래에서 직접 선택해주세요.`;
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      el.pillPhotoStatus.textContent = "사진을 불러오지 못했습니다. 다시 시도해주세요.";
+    };
+    img.src = url;
+  });
 
   // ---------- 검색 히스토리 ----------
   const SEARCH_HISTORY_KEY = "dur_search_history";
