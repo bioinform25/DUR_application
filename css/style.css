@@ -195,6 +195,62 @@ header.top p.subtitle {
   min-width: 160px;
 }
 
+.note-form, .medicine-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.note-form input[type="date"], .medicine-form input[type="date"], .medicine-form input[type="text"] {
+  font-size: calc(14px * var(--font-zoom, 1));
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+}
+.note-form textarea {
+  flex: 1;
+  min-width: 200px;
+  font-size: calc(14px * var(--font-zoom, 1));
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-family: inherit;
+  resize: vertical;
+}
+.medicine-form input[type="text"] { flex: 1; min-width: 160px; }
+
+.note-list, .medicine-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.note-item, .medicine-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.note-date { font-size: calc(12.5px * var(--font-zoom, 1)); color: var(--text-sub); font-weight: 700; }
+.note-text { font-size: calc(14.5px * var(--font-zoom, 1)); margin-top: 2px; }
+.medicine-name { font-size: calc(15px * var(--font-zoom, 1)); font-weight: 700; }
+.medicine-expiry { font-size: calc(12.5px * var(--font-zoom, 1)); color: var(--text-sub); margin-top: 2px; }
+.medicine-status-badge { font-weight: 800; }
+.medicine-item.expired { background: var(--danger-bg); border-color: var(--danger-border); }
+.medicine-item.expired .medicine-expiry { color: var(--danger-text); }
+.medicine-item.soon { background: var(--warn-bg); border-color: var(--warn-border); }
+.medicine-item.soon .medicine-expiry { color: var(--warn-text); }
+
 .result-highlight {
   display: inline-block;
   margin-left: 6px;
@@ -234,6 +290,75 @@ header.top p.subtitle {
   margin-bottom: 14px;
 }
 .card-header-row h2 { margin-bottom: 0; }
+.header-btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- 응급 요약 카드 ---------- */
+.emergency-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow-y: auto;
+  padding: 24px 16px;
+}
+.emergency-card {
+  background: var(--card-bg);
+  border-radius: 16px;
+  max-width: 560px;
+  width: 100%;
+  padding: 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+.emergency-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.emergency-card-header h2 { margin: 0; font-size: calc(22px * var(--font-zoom, 1)); color: var(--danger-text); }
+.emergency-card-time { font-size: calc(13px * var(--font-zoom, 1)); color: var(--text-sub); margin: 0 0 16px; }
+.emergency-drug-list { list-style: none; margin: 8px 0 16px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.emergency-drug-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: calc(16px * var(--font-zoom, 1));
+}
+.emergency-drug-sub { font-size: calc(13px * var(--font-zoom, 1)); color: var(--text-sub); }
+.emergency-narcotic-tag {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: calc(12.5px * var(--font-zoom, 1));
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+.emergency-warning {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+  border: 2px solid var(--danger-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: calc(15px * var(--font-zoom, 1));
+}
+.emergency-disclaimer { font-size: calc(12.5px * var(--font-zoom, 1)); color: var(--text-sub); }
+
+@media print {
+  body.emergency-mode .app { display: none !important; }
+  body.emergency-mode .emergency-overlay {
+    position: static !important;
+    background: none !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+  body.emergency-mode .emergency-card { box-shadow: none; max-width: 100%; }
+}
 
 .print-btn {
   flex-shrink: 0;
@@ -731,6 +856,59 @@ header.top p.subtitle {
   cursor: pointer;
 }
 
+/* ---------- 복용 기록 캘린더 ---------- */
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 10px 0;
+}
+.calendar-month-label { font-size: calc(16px * var(--font-zoom, 1)); font-weight: 800; min-width: 100px; text-align: center; }
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: calc(12.5px * var(--font-zoom, 1));
+  color: var(--text-sub);
+  margin-bottom: 4px;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.calendar-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  font-size: calc(13px * var(--font-zoom, 1));
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+}
+.calendar-cell.empty { border: none; background: transparent; }
+.calendar-cell.future { color: var(--text-sub); opacity: 0.5; }
+.calendar-cell.none-scheduled { color: var(--text-sub); opacity: 0.4; }
+.calendar-cell.full { background: #d9f2e3; border-color: #2f9e5c; color: #1a6b3c; font-weight: 700; }
+.calendar-cell.partial { background: var(--warn-bg); border-color: var(--warn-border); color: var(--warn-text); font-weight: 700; }
+.calendar-cell.none { background: var(--danger-bg); border-color: var(--danger-border); color: var(--danger-text); }
+.calendar-cell.is-today { box-shadow: 0 0 0 2px var(--primary) inset; }
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 10px;
+  font-size: calc(12.5px * var(--font-zoom, 1));
+  color: var(--text-sub);
+}
+.calendar-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.calendar-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.calendar-dot.full { background: #2f9e5c; }
+.calendar-dot.partial { background: var(--warn-border); }
+.calendar-dot.none { background: var(--danger-border); }
+
 .reminder-hint {
   font-size: calc(14px * var(--font-zoom, 1));
   color: var(--text-sub);
@@ -1017,6 +1195,14 @@ header.top p.subtitle {
   padding: 14px 18px;
   margin-bottom: 16px;
 }
+.risk-level-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
 .risk-level {
   display: inline-block;
   font-size: calc(14px * var(--font-zoom, 1));
@@ -1024,7 +1210,23 @@ header.top p.subtitle {
   padding: 3px 10px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.6);
-  margin-bottom: 6px;
+}
+.risk-score {
+  font-size: calc(13px * var(--font-zoom, 1));
+  font-weight: 700;
+  opacity: 0.85;
+}
+.risk-score-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.risk-score-bar-fill {
+  height: 100%;
+  background: currentColor;
+  border-radius: 999px;
 }
 .risk-headline {
   font-size: calc(16.5px * var(--font-zoom, 1));

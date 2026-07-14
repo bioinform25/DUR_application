@@ -48,11 +48,21 @@
     voiceSearchHint: document.getElementById("voice-search-hint"),
     voiceSearchStatus: document.getElementById("voice-search-status"),
     printBtn: document.getElementById("print-btn"),
+    emergencyCardBtn: document.getElementById("emergency-card-btn"),
+    emergencyCardOverlay: document.getElementById("emergency-card-overlay"),
+    emergencyCardCloseBtn: document.getElementById("emergency-card-close-btn"),
+    emergencyCardTime: document.getElementById("emergency-card-time"),
+    emergencyCardBody: document.getElementById("emergency-card-body"),
+    emergencyCardPrintBtn: document.getElementById("emergency-card-print-btn"),
     printDate: document.getElementById("print-date"),
     reminderList: document.getElementById("reminder-list"),
     reminderEmptyMsg: document.getElementById("reminder-empty-msg"),
     todayScheduleWrap: document.getElementById("today-schedule-wrap"),
     todayScheduleList: document.getElementById("today-schedule-list"),
+    calendarPrevBtn: document.getElementById("calendar-prev-btn"),
+    calendarNextBtn: document.getElementById("calendar-next-btn"),
+    calendarMonthLabel: document.getElementById("calendar-month-label"),
+    calendarGrid: document.getElementById("calendar-grid"),
     ocrBtn: document.getElementById("ocr-btn"),
     ocrFileInput: document.getElementById("ocr-file-input"),
     ocrPanel: document.getElementById("ocr-panel"),
@@ -63,6 +73,16 @@
     profileAgeRange: document.getElementById("profile-age-range"),
     profileSex: document.getElementById("profile-sex"),
     profileClearBtn: document.getElementById("profile-clear-btn"),
+    noteDateInput: document.getElementById("note-date-input"),
+    noteTextInput: document.getElementById("note-text-input"),
+    noteAddBtn: document.getElementById("note-add-btn"),
+    noteList: document.getElementById("note-list"),
+    noteEmptyMsg: document.getElementById("note-empty-msg"),
+    medicineNameInput: document.getElementById("medicine-name-input"),
+    medicineExpiryInput: document.getElementById("medicine-expiry-input"),
+    medicineAddBtn: document.getElementById("medicine-add-btn"),
+    medicineList: document.getElementById("medicine-list"),
+    medicineEmptyMsg: document.getElementById("medicine-empty-msg"),
     pillFinderBtn: document.getElementById("pill-finder-btn"),
     pillFinderPanel: document.getElementById("pill-finder-panel"),
     pillFinderShape: document.getElementById("pill-finder-shape"),
@@ -721,6 +741,27 @@
     renderResults();
   }
 
+  // 올바른 용량인 걸 이미 확인했다면, 매번 "다른 용량으로 바꾸기"를 펼쳐볼 필요 없게
+  // 그 항목만 접어둔다(취소도 가능). 바구니 항목 자체에 저장해서 가족 그룹과도
+  // 함께 동기화된다 - 한 명이 확인하면 다른 멤버 화면에서도 접혀 보인다.
+  function confirmDosage(uid) {
+    if (!assertEditable()) return;
+    const item = state.basket.find((b) => b.uid === uid);
+    if (!item) return;
+    item.dosageConfirmed = true;
+    saveBasket();
+    renderBasket();
+  }
+
+  function unconfirmDosage(uid) {
+    if (!assertEditable()) return;
+    const item = state.basket.find((b) => b.uid === uid);
+    if (!item) return;
+    item.dosageConfirmed = false;
+    saveBasket();
+    renderBasket();
+  }
+
   el.clearBasketBtn.addEventListener("click", () => {
     if (!assertEditable()) return;
     if (!state.basket.length) return;
@@ -827,10 +868,23 @@
           : "";
 
         const swapCandidates = state.familyReadOnly ? [] : findSameIngredientProducts(b);
-        const swapHtml = swapCandidates.length
-          ? `<button type="button" class="link-btn swap-toggle-btn no-print" data-uid="${escapeHtml(b.uid)}">🔄 다른 용량으로 바꾸기</button>
+        let swapHtml = "";
+        if (swapCandidates.length) {
+          if (b.dosageConfirmed) {
+            // 이미 올바른 용량을 확인해뒀으면 매번 펼쳐볼 필요 없이 접어두고,
+            // 다시 확인하고 싶을 때만 누르는 작은 링크만 남긴다.
+            swapHtml = state.familyReadOnly
+              ? ""
+              : `<button type="button" class="link-btn dosage-recheck-btn no-print" data-uid="${escapeHtml(b.uid)}">🔄 용량 다시 확인하기</button>`;
+          } else {
+            swapHtml = `<button type="button" class="link-btn swap-toggle-btn no-print" data-uid="${escapeHtml(b.uid)}">🔄 다른 용량으로 바꾸기</button>
              <div class="swap-panel no-print" data-uid="${escapeHtml(b.uid)}" hidden>
                <p class="swap-panel-hint">같은 약의 다른 용량입니다. 실제 복용 중인 용량과 다르면 눌러서 바꾸세요.</p>
+               ${
+                 state.familyReadOnly
+                   ? ""
+                   : `<button type="button" class="link-btn confirm-dosage-btn" data-uid="${escapeHtml(b.uid)}">✓ 이 용량이 맞아요 (다시 안 보이기)</button>`
+               }
                ${swapCandidates
                  .map(
                    (p) => `
@@ -840,8 +894,9 @@
                  </button>`
                  )
                  .join("")}
-             </div>`
-          : "";
+             </div>`;
+          }
+        }
 
         const pill = b.kind === "product" ? state.pillInfoByCode[b.code] : null;
         const pillThumb = pill && pill.image_url
@@ -928,6 +983,12 @@
       btn.addEventListener("click", () => {
         swapBasketItem(btn.getAttribute("data-uid"), btn.getAttribute("data-code"));
       });
+    });
+    el.basketList.querySelectorAll(".confirm-dosage-btn").forEach((btn) => {
+      btn.addEventListener("click", () => confirmDosage(btn.getAttribute("data-uid")));
+    });
+    el.basketList.querySelectorAll(".dosage-recheck-btn").forEach((btn) => {
+      btn.addEventListener("click", () => unconfirmDosage(btn.getAttribute("data-uid")));
     });
     el.basketList.querySelectorAll(".partners-toggle-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -1090,6 +1151,28 @@
 
   // 발견된 항목들을 훑어 "종합 위험도"를 한 줄로 요약한다. 카드를 하나하나 안 읽어도
   // 맨 위에서 심각성을 바로 파악할 수 있게 하기 위함(특히 스크롤이 부담스러운 사용자).
+  // 위험도를 숫자 점수(0~100)로도 보여준다 - "높음/중간/낮음" 문구만으로는 감이
+  // 안 잡힐 수 있어, 실제 상용 앱(필톡 등)도 점수+단계를 같이 보여주는 걸 참고했다.
+  // 절대적인 의학적 위험도 수치가 아니라, 발견된 건수·심각도를 단순 가중합한
+  // "한눈에 보는 상대적 지표"라는 점을 UI 문구에서 분명히 한다.
+  const RISK_SCORE_WEIGHTS = {
+    contraindicated: 40,
+    caution: 20,
+    "food-interaction": 15,
+    duplicate: 12,
+    advisory: 6,
+    other: 4,
+  };
+
+  function computeRiskScore(matches) {
+    let score = 0;
+    for (const m of matches) {
+      const bucket = severityBucket(m.rule.severity);
+      score += RISK_SCORE_WEIGHTS[bucket] || 4;
+    }
+    return Math.min(100, score);
+  }
+
   function buildRiskSummary(matches) {
     const counts = {};
     for (const m of matches) {
@@ -1097,10 +1180,12 @@
       counts[b] = (counts[b] || 0) + 1;
     }
     const total = matches.length;
+    const score = computeRiskScore(matches);
 
     if (counts.contraindicated) {
       return {
         level: "높음",
+        score,
         bucketClass: "contraindicated",
         headline: `병용금기 ${counts.contraindicated}건을 포함해 총 ${total}건 발견 — 반드시 약사·의사와 상담 후 복용하세요.`,
       };
@@ -1109,6 +1194,7 @@
       const foodPart = counts["food-interaction"] ? ` (음식 상호작용 ${counts["food-interaction"]}건 포함)` : "";
       return {
         level: "중간",
+        score,
         bucketClass: "caution",
         headline: `주의가 필요한 조합 총 ${total}건 발견${foodPart} — 복용 전 확인이 필요합니다.`,
       };
@@ -1116,12 +1202,14 @@
     if (counts.duplicate) {
       return {
         level: "중간",
+        score,
         bucketClass: "duplicate",
         headline: `효능군 중복 등 총 ${total}건 발견 — 중복으로 복용 중인 약이 없는지 확인해보세요.`,
       };
     }
     return {
       level: "낮음",
+      score,
       bucketClass: "advisory",
       headline: `참고할 주의사항 총 ${total}건 발견 — 심각한 위험은 아니지만 확인해두시면 좋습니다.`,
     };
@@ -1150,7 +1238,11 @@
     const risk = buildRiskSummary(matches);
     const summary = `
       <div class="risk-banner ${risk.bucketClass}">
-        <span class="risk-level">종합 위험도: ${risk.level}</span>
+        <div class="risk-level-row">
+          <span class="risk-level">종합 위험도: ${risk.level}</span>
+          <span class="risk-score" title="발견된 건수·심각도를 단순 합산한 상대적 지표로, 의학적 위험도 수치가 아닙니다.">${risk.score}점 / 100</span>
+        </div>
+        <div class="risk-score-bar"><div class="risk-score-bar-fill" style="width:${risk.score}%"></div></div>
         <p class="risk-headline">${escapeHtml(risk.headline)}</p>
       </div>`;
 
@@ -1310,11 +1402,13 @@
     }
   }
 
+  const TAKEN_RETENTION_DAYS = 35; // 월간 복용 기록 캘린더를 보여주려면 최소 한 달치는 남아있어야 함
+
   function saveTakenDoses() {
-    // 기록이 무한정 쌓이지 않도록 최근 3일치 키만 남긴다.
+    // 기록이 무한정 쌓이지 않도록 최근 N일치 키만 남긴다.
     const recentDates = [];
     const now = new Date();
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < TAKEN_RETENTION_DAYS; i++) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
       recentDates.push(d.toISOString().slice(0, 10));
@@ -1330,6 +1424,7 @@
     else takenDoses.delete(fireKey);
     saveTakenDoses();
     renderTodaySchedule();
+    renderAdherenceCalendar();
   }
 
   // 그룹에 나 말고 다른 멤버가 있을 때만 "알림 받을 사람" 선택지를 보여준다
@@ -1409,6 +1504,7 @@
     });
 
     renderTodaySchedule();
+    renderAdherenceCalendar();
   }
 
   // 알림을 그룹원 특정 한 명에게만 배정한다(예: 손녀가 할머니 몫 알림을 설정하되,
@@ -1469,12 +1565,92 @@
     });
   }
 
+  // ---------- 복용 기록 캘린더 ----------
+  // 과거에 그 알림이 실제로 어떤 요일/시간에 등록돼 있었는지는 기록해두지 않으므로,
+  // "지금 등록된 알림 설정 기준"으로 과거 날짜의 예상 복용 횟수를 역산한다(근사치).
+  // 안내 문구에도 이 점을 명시해둔다.
+  const now0 = new Date();
+  let calendarYear = now0.getFullYear();
+  let calendarMonth = now0.getMonth(); // 0-11
+
+  function getExpectedSlotCount(dateObj) {
+    const dow = dateObj.getDay();
+    let count = 0;
+    for (const r of reminders) {
+      if (getReminderDays(r).includes(dow)) count += r.times.length;
+    }
+    return count;
+  }
+
+  function getTakenSlotCount(dateStr) {
+    let count = 0;
+    for (const key of takenDoses) {
+      if (key.endsWith("_" + dateStr)) count++;
+    }
+    return count;
+  }
+
+  function renderAdherenceCalendar() {
+    if (!el.calendarGrid) return;
+    el.calendarMonthLabel.textContent = `${calendarYear}년 ${calendarMonth + 1}월`;
+
+    const firstDay = new Date(calendarYear, calendarMonth, 1);
+    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    const startWeekday = firstDay.getDay();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const cells = [];
+    for (let i = 0; i < startWeekday; i++) {
+      cells.push('<div class="calendar-cell empty"></div>');
+    }
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateObj = new Date(calendarYear, calendarMonth, day);
+      const dateStr = dateObj.toISOString().slice(0, 10);
+      let statusClass = "future";
+      if (dateObj <= today) {
+        const expected = getExpectedSlotCount(dateObj);
+        const taken = getTakenSlotCount(dateStr);
+        if (expected === 0) statusClass = "none-scheduled";
+        else if (taken >= expected) statusClass = "full";
+        else if (taken > 0) statusClass = "partial";
+        else statusClass = "none";
+      }
+      const isToday = dateObj.getTime() === today.getTime();
+      cells.push(
+        `<div class="calendar-cell ${statusClass} ${isToday ? "is-today" : ""}" title="${dateStr}"><span>${day}</span></div>`
+      );
+    }
+
+    el.calendarGrid.innerHTML = cells.join("");
+  }
+
+  el.calendarPrevBtn.addEventListener("click", () => {
+    calendarMonth -= 1;
+    if (calendarMonth < 0) {
+      calendarMonth = 11;
+      calendarYear -= 1;
+    }
+    renderAdherenceCalendar();
+  });
+  el.calendarNextBtn.addEventListener("click", () => {
+    calendarMonth += 1;
+    if (calendarMonth > 11) {
+      calendarMonth = 0;
+      calendarYear += 1;
+    }
+    renderAdherenceCalendar();
+  });
+
+  // 정해진 시간에 안 먹고 넘어가면(=복용완료 체크가 안 돼 있으면) 15분, 30분 뒤에
+  // 한 번씩 더 알려준다("필콕" 등 실제 복약 알림 앱들이 쓰는 재알림 방식을 참고함).
+  // 이미 복용 체크를 해뒀으면 그 뒤 재알림은 전부 건너뛴다.
+  const REMINDER_ESCALATION_OFFSETS_MIN = [0, 15, 30];
+
   function checkReminders() {
     if (!reminders.length) return;
     const now = new Date();
-    const hh = String(now.getHours()).padStart(2, "0");
-    const mm = String(now.getMinutes()).padStart(2, "0");
-    const currentTime = `${hh}:${mm}`;
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
     const today = now.toISOString().slice(0, 10);
     const todayDow = now.getDay();
     const myUid = window.FamilySync ? window.FamilySync.getCurrentUserId() : null;
@@ -1484,13 +1660,23 @@
       // 할머니 몫 알림이 손녀 폰에서는 안 울리고 할머니 폰에서만 울리도록).
       if (r.assignedTo && myUid && r.assignedTo !== myUid) continue;
       if (!getReminderDays(r).includes(todayDow)) continue;
-      if (!r.times.includes(currentTime)) continue;
-      const fireKey = `${r.id}_${currentTime}_${today}`;
-      if (remindersFiredToday.has(fireKey)) continue;
-      remindersFiredToday.add(fireKey);
-      if (takenDoses.has(fireKey)) continue; // 미리 복용완료로 체크해뒀다면 알림을 생략한다
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("복약 알림", { body: `${r.label} 복용 시간입니다.`, icon: "icons/icon-192.png" });
+
+      for (const t of r.times) {
+        const [th, tm] = t.split(":").map(Number);
+        const schedMinutes = th * 60 + tm;
+        const fireKey = `${r.id}_${t}_${today}`;
+        if (takenDoses.has(fireKey)) continue; // 이미 복용 체크했으면 원래 시간이든 재알림이든 다 생략
+
+        for (const offset of REMINDER_ESCALATION_OFFSETS_MIN) {
+          if (nowMinutes !== schedMinutes + offset) continue;
+          const escalationKey = `${fireKey}_${offset}`;
+          if (remindersFiredToday.has(escalationKey)) continue;
+          remindersFiredToday.add(escalationKey);
+          if ("Notification" in window && Notification.permission === "granted") {
+            const suffix = offset === 0 ? "" : ` (${offset}분 경과 - 아직 복용 체크가 안 돼 있어요)`;
+            new Notification("복약 알림", { body: `${r.label} 복용 시간입니다.${suffix}`, icon: "icons/icon-192.png" });
+          }
+        }
       }
     }
   }
@@ -1546,6 +1732,134 @@
     renderResults();
   });
 
+  // ---------- 부작용·특이사항 메모 ----------
+  // 자유 텍스트 건강 기록이라 민감할 수 있어 그룹 공유 없이 이 브라우저에만 저장한다.
+  const NOTES_KEY = "dur_side_effect_notes";
+  let sideEffectNotes = loadSideEffectNotes();
+
+  function loadSideEffectNotes() {
+    try {
+      const raw = localStorage.getItem(NOTES_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveSideEffectNotes() {
+    localStorage.setItem(NOTES_KEY, JSON.stringify(sideEffectNotes));
+  }
+
+  function addSideEffectNote(date, text) {
+    if (!text.trim()) return;
+    sideEffectNotes.push({ id: "n" + Date.now(), date: date || new Date().toISOString().slice(0, 10), text: text.trim() });
+    sideEffectNotes.sort((a, b) => b.date.localeCompare(a.date));
+    saveSideEffectNotes();
+    renderSideEffectNotes();
+  }
+
+  function removeSideEffectNote(id) {
+    if (!confirm("이 메모를 삭제하시겠습니까?")) return;
+    sideEffectNotes = sideEffectNotes.filter((n) => n.id !== id);
+    saveSideEffectNotes();
+    renderSideEffectNotes();
+  }
+
+  function renderSideEffectNotes() {
+    el.noteEmptyMsg.style.display = sideEffectNotes.length ? "none" : "block";
+    el.noteList.innerHTML = sideEffectNotes
+      .map(
+        (n) => `
+      <li class="note-item">
+        <div class="note-info">
+          <div class="note-date">${escapeHtml(n.date)}</div>
+          <div class="note-text">${escapeHtml(n.text)}</div>
+        </div>
+        <button class="remove-btn" data-id="${n.id}" title="메모 삭제">×</button>
+      </li>`
+      )
+      .join("");
+    el.noteList.querySelectorAll(".remove-btn").forEach((btn) => {
+      btn.addEventListener("click", () => removeSideEffectNote(btn.getAttribute("data-id")));
+    });
+  }
+
+  el.noteDateInput.value = new Date().toISOString().slice(0, 10);
+  el.noteAddBtn.addEventListener("click", () => {
+    addSideEffectNote(el.noteDateInput.value, el.noteTextInput.value);
+    el.noteTextInput.value = "";
+  });
+
+  // ---------- 상비약 유효기한 관리 ----------
+  const MEDICINE_KEY = "dur_medicine_cabinet";
+  let medicineCabinet = loadMedicineCabinet();
+
+  function loadMedicineCabinet() {
+    try {
+      const raw = localStorage.getItem(MEDICINE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveMedicineCabinet() {
+    localStorage.setItem(MEDICINE_KEY, JSON.stringify(medicineCabinet));
+  }
+
+  function addMedicine(name, expiry) {
+    if (!name.trim() || !expiry) return;
+    medicineCabinet.push({ id: "m" + Date.now(), name: name.trim(), expiry });
+    medicineCabinet.sort((a, b) => a.expiry.localeCompare(b.expiry));
+    saveMedicineCabinet();
+    renderMedicineCabinet();
+  }
+
+  function removeMedicine(id) {
+    if (!confirm("이 상비약을 목록에서 삭제하시겠습니까?")) return;
+    medicineCabinet = medicineCabinet.filter((m) => m.id !== id);
+    saveMedicineCabinet();
+    renderMedicineCabinet();
+  }
+
+  function medicineStatus(expiry) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (expiry < todayStr) return "expired";
+    const diffDays = Math.round((new Date(expiry) - new Date(todayStr)) / 86400000);
+    if (diffDays <= 30) return "soon";
+    return "ok";
+  }
+
+  function renderMedicineCabinet() {
+    el.medicineEmptyMsg.style.display = medicineCabinet.length ? "none" : "block";
+    const statusLabels = { expired: "⚠️ 유효기한 지남", soon: "⏳ 임박(30일 이내)", ok: "✅ 정상" };
+    el.medicineList.innerHTML = medicineCabinet
+      .map((m) => {
+        const status = medicineStatus(m.expiry);
+        return `
+      <li class="medicine-item ${status}">
+        <div class="medicine-info">
+          <div class="medicine-name">${escapeHtml(m.name)}</div>
+          <div class="medicine-expiry">유효기한: ${escapeHtml(m.expiry)} <span class="medicine-status-badge">${statusLabels[status]}</span></div>
+        </div>
+        <button class="remove-btn" data-id="${m.id}" title="삭제">×</button>
+      </li>`;
+      })
+      .join("");
+    el.medicineList.querySelectorAll(".remove-btn").forEach((btn) => {
+      btn.addEventListener("click", () => removeMedicine(btn.getAttribute("data-id")));
+    });
+  }
+
+  el.medicineAddBtn.addEventListener("click", () => {
+    addMedicine(el.medicineNameInput.value, el.medicineExpiryInput.value);
+    el.medicineNameInput.value = "";
+    el.medicineExpiryInput.value = "";
+  });
+
+  renderSideEffectNotes();
+  renderMedicineCabinet();
+
   // ---------- 모드 전환 ----------
   el.modeLayBtn.addEventListener("click", () => setMode("lay"));
   el.modeExpertBtn.addEventListener("click", () => setMode("expert"));
@@ -1569,6 +1883,59 @@
     el.printDate.textContent = now.toLocaleString("ko-KR");
     window.print();
   });
+
+  // ---------- 응급 상황용 요약 카드 ----------
+  // 의식이 없거나 응급실에서 급하게 보여줘야 할 때를 위한 한 화면 요약. 외부 서버로
+  // 데이터를 보내는 QR코드 생성 API 등은 건강정보를 제3자에게 노출시킬 위험이 있어
+  // 의도적으로 배제하고, 이 브라우저 안에서만 렌더링되는 화면/인쇄물로 만든다.
+  function renderEmergencyCard() {
+    el.emergencyCardTime.textContent = `생성 시각: ${new Date().toLocaleString("ko-KR")}`;
+
+    if (!state.basket.length) {
+      el.emergencyCardBody.innerHTML = "<p>담긴 약이 없습니다. 먼저 '1. 복용 중인 약 검색해서 담기'에서 약을 담아주세요.</p>";
+      return;
+    }
+
+    const matches = analyzeBasket();
+    const contraindicated = matches.filter((m) => severityBucket(m.rule.severity) === "contraindicated");
+
+    const drugRows = state.basket
+      .map((b) => {
+        const narcotic = findNarcoticClassification(b.ingredientKeys);
+        return `
+        <li class="emergency-drug-item">
+          <strong>${escapeHtml(b.label)}</strong>
+          <div class="emergency-drug-sub">${escapeHtml(b.sub)}</div>
+          ${narcotic ? `<span class="emergency-narcotic-tag">⚠️ ${escapeHtml(narcotic.type_code)}</span>` : ""}
+        </li>`;
+      })
+      .join("");
+
+    const warnHtml = contraindicated.length
+      ? `<div class="emergency-warning">
+           <strong>⚠️ 병용금기 조합 ${contraindicated.length}건 발견 — 반드시 의료진에게 알리세요</strong>
+           <ul>${contraindicated.map((m) => `<li>${escapeHtml(m.items.map((it) => it.label).join(" + "))}</li>`).join("")}</ul>
+         </div>`
+      : "";
+
+    el.emergencyCardBody.innerHTML = `
+      <h3>복용 중인 약 (${state.basket.length}개)</h3>
+      <ul class="emergency-drug-list">${drugRows}</ul>
+      ${warnHtml}
+      <p class="emergency-disclaimer">본 요약은 참고용이며, 실제 응급 처치는 반드시 의료진의 판단을 따르세요.</p>
+    `;
+  }
+
+  el.emergencyCardBtn.addEventListener("click", () => {
+    renderEmergencyCard();
+    el.emergencyCardOverlay.hidden = false;
+    document.body.classList.add("emergency-mode");
+  });
+  el.emergencyCardCloseBtn.addEventListener("click", () => {
+    el.emergencyCardOverlay.hidden = true;
+    document.body.classList.remove("emergency-mode");
+  });
+  el.emergencyCardPrintBtn.addEventListener("click", () => window.print());
 
   // ---------- 다크모드 수동 토글 ----------
   // "auto"일 때는 data-theme을 아예 안 붙여서 CSS의 prefers-color-scheme가 그대로 적용된다.
@@ -1845,6 +2212,7 @@
       takenDoses = new Set(data.takenDoses);
       saveTakenDoses();
       renderTodaySchedule();
+    renderAdherenceCalendar();
     }
   });
 
