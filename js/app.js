@@ -6,6 +6,7 @@
     rulesData: null,
     productsByCode: {}, // product_code -> 제품 상세 (저렴한 대체약 비교용)
     pillInfoByCode: {}, // product_code(=EDI_CODE) -> 알약 모양/색깔/사진 (식약처 낱알식별정보)
+    narcoticSubstances: [], // 식약처 마약류 약물 및 오남용 정보(향정신성의약품/마약 등 법적 분류)
     ingredientToGroups: {}, // ingredient_key -> 효능군 이름 목록 (효능군중복 판정용)
     suggestions: [], // 검색 대상 통합 인덱스
     basket: [],       // 담은 약 목록
@@ -99,6 +100,19 @@
     } catch {
       state.pillInfoByCode = {};
     }
+
+    // 마약류 법적 분류(선택 데이터) - 마찬가지로 없어도 핵심 기능엔 영향 없음.
+    state.narcoticSubstances = [];
+    try {
+      const narcRes = await fetch("data/narcotic_classification.json");
+      if (narcRes.ok) {
+        const narcData = await narcRes.json();
+        state.narcoticSubstances = narcData.substances || [];
+      }
+    } catch {
+      state.narcoticSubstances = [];
+    }
+
     buildPillFinderOptions();
 
     // 효능군중복: "효능군 -> 소속 성분키 목록"을 "성분키 -> 소속 효능군 목록"으로
@@ -634,6 +648,57 @@
     return results;
   }
 
+  // 바구니에 실제로 함께 담은 약이 없어도, "이 약은 어떤 성분과 병용금기/병용주의인지"
+  // 미리 참고할 수 있게 전체 DUR 규칙에서 이 약의 성분이 들어간 2성분 조합 규칙을 찾는다.
+  // (효능군중복은 미리 정해진 쌍이 아니라 런타임 판정이라 여기서는 다루지 않는다)
+  function findContraindicatedPartners(basketItem) {
+    const rules = (state.rulesData && state.rulesData.rules) || [];
+    const seen = new Set();
+    const partners = [];
+    for (const rule of rules) {
+      if (!rule.ingredient_keys || rule.ingredient_keys.length !== 2) continue;
+      if (rule.severity !== "contraindicated" && rule.severity !== "caution") continue;
+      const [k1, k2] = rule.ingredient_keys;
+      let partnerKey = null;
+      if (basketItem.ingredientKeys.includes(k1) && !basketItem.ingredientKeys.includes(k2)) partnerKey = k2;
+      else if (basketItem.ingredientKeys.includes(k2) && !basketItem.ingredientKeys.includes(k1)) partnerKey = k1;
+      if (!partnerKey) continue;
+      const dedupeKey = partnerKey + "|" + rule.id;
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      partners.push({ partnerKey, rule });
+    }
+    partners.sort((a, b) => (a.rule.severity === b.rule.severity ? 0 : a.rule.severity === "contraindicated" ? -1 : 1));
+    return partners;
+  }
+
+  // 식약처 마약류 약물 및 오남용 정보의 성분명(name_en_normalized)은 용량·염(salt)
+  // 표기가 없는 "기초 성분명" 형태라(예: "nalbuphine"), 우리 ingredient_keys(예:
+  // "nalbuphine hydrochloride")와 정확히 같지 않다. 그래서 정확히 같거나 "기초
+  // 성분명 + 공백"으로 시작하는 것만 매칭한다 - 단순 포함(includes) 매칭은
+  // "3,4,5-트리메톡시암페타민"처럼 숫자로 시작하는 이름이 엉뚱하게 매칭되는
+  // 문제가 실제로 있어서(직접 검증함) 단어 경계 기준으로 엄격하게 비교한다.
+  const NARCOTIC_TYPE_MESSAGES = {
+    향정신성의약품: "오남용·의존성 위험이 있는 향정신성의약품입니다. 처방받은 대로만 복용하고, 임의로 양을 늘리거나 다른 사람과 나누어 복용하지 마세요.",
+    마약: "마약류(의료용 마약)로 관리되는 성분입니다. 의사의 처방 없이 사용하거나 임의로 용량을 조절하면 안 되며, 의존성 위험이 있습니다.",
+    환각성유해화학물: "환각성유해화학물질로 지정된 성분입니다. 오남용 시 심각한 건강 위해가 있을 수 있습니다.",
+    대마: "대마 성분으로 지정된 물질입니다.",
+    원료물질: "마약류 원료물질로 법에 따라 관리되는 성분입니다.",
+  };
+
+  function findNarcoticClassification(ingredientKeys) {
+    if (!ingredientKeys || !ingredientKeys.length || !state.narcoticSubstances.length) return null;
+    for (const key of ingredientKeys) {
+      for (const substance of state.narcoticSubstances) {
+        const norm = substance.name_en_normalized;
+        if (key === norm || key.startsWith(norm + " ")) {
+          return substance;
+        }
+      }
+    }
+    return null;
+  }
+
   function swapBasketItem(oldUid, newProductCode) {
     if (!assertEditable()) return;
     const idx = state.basket.findIndex((b) => b.uid === oldUid);
@@ -725,14 +790,44 @@
           ? `<span class="pill-thumb pill-thumb-empty" title="${escapeHtml([pill.shape, pill.color1].filter(Boolean).join(" · "))}" aria-hidden="true">💊</span>`
           : "";
 
+        const partners = findContraindicatedPartners(b);
+        const partnersHtml = partners.length
+          ? `<button type="button" class="link-btn partners-toggle-btn no-print" data-uid="${escapeHtml(b.uid)}">⚠️ 병용금기·주의 목록 보기 (${partners.length})</button>
+             <div class="partners-panel no-print" data-uid="${escapeHtml(b.uid)}" hidden>
+               <p class="partners-panel-hint">지금 바구니에 없어도, 이 성분과 함께 먹으면 안 되거나 주의가 필요한 성분 목록입니다.</p>
+               <ul class="partners-list">
+                 ${partners
+                   .map(
+                     ({ partnerKey, rule }) => `
+                   <li class="partners-item ${rule.severity === "contraindicated" ? "contraindicated" : "caution"}">
+                     <span class="partners-badge">${rule.severity === "contraindicated" ? "병용금기" : "병용주의"}</span>
+                     <span class="partners-name">${escapeHtml(prettifyKey(partnerKey))}</span>
+                     ${rule.description ? `<span class="partners-desc">${escapeHtml(rule.description)}</span>` : ""}
+                   </li>`
+                   )
+                   .join("")}
+               </ul>
+             </div>`
+          : "";
+
+        const narcotic = findNarcoticClassification(b.ingredientKeys);
+        const narcoticHtml = narcotic
+          ? `<div class="narcotic-badge-row">
+               <span class="narcotic-badge">${escapeHtml(narcotic.type_code)}</span>
+               <span class="narcotic-message">${escapeHtml(NARCOTIC_TYPE_MESSAGES[narcotic.type_code] || "")}</span>
+             </div>`
+          : "";
+
         return `
         <li class="basket-item">
           ${pillThumb}
           <div class="info">
             <div class="name">${escapeHtml(b.label)}</div>
             <div class="meta">${escapeHtml(b.sub)}</div>
+            ${narcoticHtml}
             ${altHtml}
             ${swapHtml}
+            ${partnersHtml}
           </div>
           <div class="actions">
             <a class="link-btn health-link" title="약학정보원에서 상세정보 보기" href="${healthLink}" target="_blank" rel="noopener">약학정보원</a>
@@ -759,6 +854,13 @@
     el.basketList.querySelectorAll(".swap-option-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         swapBasketItem(btn.getAttribute("data-uid"), btn.getAttribute("data-code"));
+      });
+    });
+    el.basketList.querySelectorAll(".partners-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const uid = btn.getAttribute("data-uid");
+        const panel = el.basketList.querySelector(`.partners-panel[data-uid="${cssEscape(uid)}"]`);
+        if (panel) panel.hidden = !panel.hidden;
       });
     });
   }

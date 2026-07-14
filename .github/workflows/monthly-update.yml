@@ -44,6 +44,12 @@ jobs:
           DUR_API_KEY: ${{ secrets.DUR_API_KEY }}
         run: python scripts/fetch_pill_info.py
 
+      - name: 마약류 법적 분류(향정신성의약품 등) 정보 갱신
+        shell: bash
+        env:
+          DUR_API_KEY: ${{ secrets.DUR_API_KEY }}
+        run: python scripts/fetch_narcotic_classification.py
+
       - name: 변경사항 커밋 및 푸시
         shell: bash
         run: |
