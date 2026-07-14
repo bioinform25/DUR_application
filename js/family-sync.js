@@ -11,6 +11,26 @@
 (function () {
   "use strict";
 
+  // 카카오톡/인스타그램 등 메신저 앱 내장 브라우저(WebView)에서는 구글이 보안 정책상
+  // OAuth 로그인을 아예 차단한다("disallowed_useragent" 403 에러). 코드로 우회할 방법은
+  // 없어서, 감지되면 실제 브라우저로 열어달라는 안내만 미리 보여준다.
+  // Firebase 스크립트 로딩 여부와 무관하게 항상 실행되어야 하므로, 이 파일에서 가장
+  // 먼저(다른 모든 로직보다 앞서) 실행한다 - 인앱 브라우저는 외부 CDN(Firebase) 로딩을
+  // 막거나 늦추는 경우가 많아서, 아래쪽에 있으면 감지 자체가 실행되지 못할 수 있다.
+  function isInAppBrowser() {
+    const ua = navigator.userAgent || "";
+    return /KAKAOTALK|Instagram|FBAN|FBAV|FB_IAB|Line\/|NAVER\(inapp|DaumApps|; ?wv\)/i.test(ua);
+  }
+  if (isInAppBrowser()) {
+    // 경고문이 들어있는 #family-share-card 섹션 자체가 기본 hidden 상태라,
+    // Firebase 로딩 성공 여부와 상관없이 이 카드부터 강제로 보이게 해야
+    // 안쪽의 webview-warning도 실제로 화면에 나타난다.
+    const card = document.getElementById("family-share-card");
+    if (card) card.hidden = false;
+    const warning = document.getElementById("webview-warning");
+    if (warning) warning.hidden = false;
+  }
+
   // Firebase 콘솔 > 프로젝트 설정 > 일반 > 내 앱에서 복사한 값.
   // apiKey는 Firebase 웹 앱의 경우 공개되어도 되는 값(진짜 접근 제어는
   // Firestore 보안 규칙으로 함) - README의 안내대로 규칙을 반드시 설정할 것.
@@ -30,18 +50,6 @@
   }
 
   document.getElementById("family-share-card").hidden = false;
-
-  // 카카오톡/인스타그램 등 메신저 앱 내장 브라우저(WebView)에서는 구글이 보안 정책상
-  // OAuth 로그인을 아예 차단한다("disallowed_useragent" 403 에러). 코드로 우회할 방법은
-  // 없어서, 감지되면 실제 브라우저로 열어달라는 안내만 미리 보여준다.
-  function isInAppBrowser() {
-    const ua = navigator.userAgent || "";
-    return /KAKAOTALK|Instagram|FBAN|FBAV|FB_IAB|Line\/|NAVER\(inapp|DaumApps|; ?wv\)/i.test(ua);
-  }
-  if (isInAppBrowser()) {
-    const warning = document.getElementById("webview-warning");
-    if (warning) warning.hidden = false;
-  }
 
   firebase.initializeApp(FIREBASE_CONFIG);
   const auth = firebase.auth();
