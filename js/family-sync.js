@@ -22,11 +22,8 @@
     return /KAKAOTALK|Instagram|FBAN|FBAV|FB_IAB|Line\/|NAVER\(inapp|DaumApps|; ?wv\)/i.test(ua);
   }
   if (isInAppBrowser()) {
-    // 경고문이 들어있는 #family-share-card 섹션 자체가 기본 hidden 상태라,
-    // Firebase 로딩 성공 여부와 상관없이 이 카드부터 강제로 보이게 해야
-    // 안쪽의 webview-warning도 실제로 화면에 나타난다.
-    const card = document.getElementById("family-share-card");
-    if (card) card.hidden = false;
+    // 이 경고는 탭(가족 공유) 안이 아니라 페이지 상단에 항상 떠 있는 배너라서,
+    // 사용자가 어느 탭을 보고 있든, Firebase가 로딩되든 안 되든 상관없이 보인다.
     const warning = document.getElementById("webview-warning");
     if (warning) warning.hidden = false;
   }

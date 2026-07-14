@@ -129,6 +129,80 @@ header.top p.subtitle {
   color: #fff;
 }
 
+/* ---------- 탭 메뉴 ---------- */
+.tab-bar {
+  display: flex;
+  gap: 6px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+}
+
+.tab-btn {
+  flex: 1;
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  padding: 11px 14px;
+  border-radius: 999px;
+  font-size: calc(15px * var(--font-zoom, 1));
+  font-weight: 700;
+  color: var(--text-sub);
+  cursor: pointer;
+}
+
+.tab-btn:hover { background: var(--primary-light); }
+
+.tab-btn.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.profile-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: calc(14px * var(--font-zoom, 1));
+  font-weight: 700;
+  color: var(--text-sub);
+}
+
+.profile-field select {
+  font-size: calc(15px * var(--font-zoom, 1));
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  min-width: 160px;
+}
+
+.result-highlight {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: calc(12.5px * var(--font-zoom, 1));
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid currentColor;
+}
+
+@media (max-width: 640px) {
+  .tab-btn { font-size: calc(13px * var(--font-zoom, 1)); padding: 10px 6px; }
+}
+
 /* ---------- 카드 공통 ---------- */
 .card {
   background: var(--card-bg);
@@ -377,6 +451,40 @@ header.top p.subtitle {
 
 .basket-item .actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 
+.swap-toggle-btn { margin-top: 6px; }
+.swap-panel {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg, #fff);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.swap-panel-hint {
+  font-size: calc(12.5px * var(--font-zoom, 1));
+  color: var(--text-sub);
+  margin: 0 0 2px;
+}
+.swap-option-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  font-size: calc(14px * var(--font-zoom, 1));
+}
+.swap-option-btn:hover { background: var(--primary-light); }
+.swap-option-name { font-weight: 700; }
+.swap-option-meta { font-size: calc(12.5px * var(--font-zoom, 1)); color: var(--text-sub); flex-shrink: 0; }
+
 /* ---------- 복약 알림 ---------- */
 .today-schedule-title {
   font-size: calc(16px * var(--font-zoom, 1));
@@ -609,6 +717,29 @@ header.top p.subtitle {
   background: rgba(255, 255, 255, 0.55);
 }
 .result-manage { font-size: calc(14.5px * var(--font-zoom, 1)); margin: 0 0 8px; opacity: 0.9; }
+.result-glossary {
+  margin-top: 8px;
+  font-size: calc(13.5px * var(--font-zoom, 1));
+}
+.result-glossary summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 6px 0;
+}
+.result-glossary ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.result-glossary li { margin-bottom: 4px; }
+.result-tip {
+  font-size: calc(15px * var(--font-zoom, 1));
+  font-weight: 700;
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px dashed currentColor;
+}
 .result-meta { font-size: calc(13px * var(--font-zoom, 1)); margin-top: 10px; opacity: 0.85; line-height: 1.6; }
 
 .no-result {
@@ -716,6 +847,10 @@ body.mode-expert .lay-only { display: none; }
   .loading {
     display: none !important;
   }
+
+  /* 탭으로 다른 메뉴를 보고 있어도, 인쇄물에는 항상 "약 확인" 탭(바구니·분석결과)
+     내용이 전부 나오도록 강제로 펼친다. 탭 자체(.no-print)는 위 규칙으로 숨겨진다. */
+  .tab-panel { display: block !important; }
 
   .print-only { display: block; }
   #print-header { margin-bottom: 16px; }

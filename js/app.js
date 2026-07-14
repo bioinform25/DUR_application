@@ -43,6 +43,9 @@
     ocrResults: document.getElementById("ocr-results"),
     ocrAddBtn: document.getElementById("ocr-add-btn"),
     ocrCancelBtn: document.getElementById("ocr-cancel-btn"),
+    profileAgeRange: document.getElementById("profile-age-range"),
+    profileSex: document.getElementById("profile-sex"),
+    profileClearBtn: document.getElementById("profile-clear-btn"),
   };
 
   // ---------- 데이터 로딩 ----------
@@ -111,17 +114,21 @@
     }
 
     for (const p of products) {
-      list.push({
-        kind: "product",
-        code: p.product_code,
-        label: p.product_name_display,
-        sub: `${p.company} · ${p.ingredient_name_display}`,
-        searchText: (p.product_name_display + " " + p.ingredient_name_display).toLowerCase(),
-        ingredientKeys: p.ingredient_keys,
-        healthSearchName: p.search_name || p.product_name_display,
-      });
+      list.push(productSuggestionEntry(p));
     }
     state.suggestions = list;
+  }
+
+  function productSuggestionEntry(p) {
+    return {
+      kind: "product",
+      code: p.product_code,
+      label: p.product_name_display,
+      sub: `${p.company} · ${p.ingredient_name_display}`,
+      searchText: (p.product_name_display + " " + p.ingredient_name_display).toLowerCase(),
+      ingredientKeys: p.ingredient_keys,
+      healthSearchName: p.search_name || p.product_name_display,
+    };
   }
 
   function prettifyKey(key) {
@@ -332,12 +339,9 @@
     }
   }
 
-  function addToBasket(item) {
-    const uid = item.kind + ":" + (item.kind === "product" ? item.code : item.key);
-    addToSearchHistory(item, uid);
-    if (state.basket.some((b) => b.uid === uid)) return;
-    state.basket.push({
-      uid,
+  function toBasketEntry(item) {
+    return {
+      uid: item.kind + ":" + (item.kind === "product" ? item.code : item.key),
       kind: item.kind,
       code: item.code,
       key: item.key,
@@ -345,7 +349,14 @@
       sub: item.sub,
       ingredientKeys: item.ingredientKeys,
       healthSearchName: item.healthSearchName || item.label,
-    });
+    };
+  }
+
+  function addToBasket(item) {
+    const entry = toBasketEntry(item);
+    addToSearchHistory(item, entry.uid);
+    if (state.basket.some((b) => b.uid === entry.uid)) return;
+    state.basket.push(entry);
     saveBasket();
     renderBasket();
     renderResults();
@@ -353,6 +364,57 @@
 
   function removeFromBasket(uid) {
     state.basket = state.basket.filter((b) => b.uid !== uid);
+    saveBasket();
+    renderBasket();
+    renderResults();
+  }
+
+  // 같은 브랜드(search_name, 용량/괄호 제거한 핵심 상품명)의 다른 용량 제품을 찾는다.
+  // 오선택 방지용("아토젯정 10/20mg"를 담으려다 실수로 10/40mg을 담은 경우 등)이라
+  // 브랜드 자체를 고정하고 용량만 다른 것만 후보로 삼는다 - 성분 키만 맞춰서 찾으면
+  // 흔한 복합제(예: 아토르바스타틴+에제티미브)는 제네릭 수십 종이 한꺼번에 쏟아져
+  // 나와서 오히려 헷갈린다. 다른 브랜드/제조사 비교는 이미 있는 "저렴한 대체약"
+  // 기능(findCheaperAlternative)의 역할로 남겨둔다.
+  function findSameIngredientProducts(basketItem) {
+    if (basketItem.kind !== "product" || !basketItem.ingredientKeys || !basketItem.ingredientKeys.length) {
+      return [];
+    }
+    const product = state.productsByCode[basketItem.code];
+    if (!product || !product.search_name) return [];
+
+    const keySet = [...basketItem.ingredientKeys].sort().join("|");
+    const idx = state.drugsData.ingredient_key_index || {};
+    const candidateCodes = new Set();
+    for (const k of basketItem.ingredientKeys) {
+      for (const code of idx[k] || []) candidateCodes.add(code);
+    }
+    const results = [];
+    for (const code of candidateCodes) {
+      if (code === basketItem.code) continue;
+      const p = state.productsByCode[code];
+      if (!p) continue;
+      if (p.search_name !== product.search_name) continue;
+      const pKeySet = [...(p.ingredient_keys || [])].sort().join("|");
+      if (pKeySet !== keySet) continue;
+      results.push(p);
+    }
+    results.sort((a, b) => a.product_name_display.localeCompare(b.product_name_display, "ko"));
+    return results;
+  }
+
+  function swapBasketItem(oldUid, newProductCode) {
+    const idx = state.basket.findIndex((b) => b.uid === oldUid);
+    if (idx === -1) return;
+    const product = state.productsByCode[newProductCode];
+    if (!product) return;
+    const entry = toBasketEntry(productSuggestionEntry(product));
+    if (entry.uid === oldUid) return;
+    if (state.basket.some((b) => b.uid === entry.uid)) {
+      // 바꾸려는 제품이 이미 바구니에 있다면, 기존 항목은 중복이니 제거만 한다.
+      state.basket.splice(idx, 1);
+    } else {
+      state.basket[idx] = entry;
+    }
     saveBasket();
     renderBasket();
     renderResults();
@@ -402,12 +464,31 @@
           ? `<div class="price-alt">💡 같은 성분·용량의 <strong>${escapeHtml(alt.cheapest.product_name_display)}</strong>(${escapeHtml(alt.cheapest.company)})이(가)
              ${alt.savings.toLocaleString()}원 더 저렴합니다 (${alt.current.price.toLocaleString()}원 → ${alt.cheapest.price.toLocaleString()}원)</div>`
           : "";
+
+        const swapCandidates = findSameIngredientProducts(b);
+        const swapHtml = swapCandidates.length
+          ? `<button type="button" class="link-btn swap-toggle-btn no-print" data-uid="${escapeHtml(b.uid)}">🔄 다른 용량으로 바꾸기</button>
+             <div class="swap-panel no-print" data-uid="${escapeHtml(b.uid)}" hidden>
+               <p class="swap-panel-hint">같은 약의 다른 용량입니다. 실제 복용 중인 용량과 다르면 눌러서 바꾸세요.</p>
+               ${swapCandidates
+                 .map(
+                   (p) => `
+                 <button type="button" class="swap-option-btn" data-uid="${escapeHtml(b.uid)}" data-code="${escapeHtml(p.product_code)}">
+                   <span class="swap-option-name">${escapeHtml(p.product_name_display)}</span>
+                   <span class="swap-option-meta">${escapeHtml(p.company)}${p.price != null ? " · " + p.price.toLocaleString() + "원" : ""}</span>
+                 </button>`
+                 )
+                 .join("")}
+             </div>`
+          : "";
+
         return `
         <li class="basket-item">
           <div class="info">
             <div class="name">${escapeHtml(b.label)}</div>
             <div class="meta">${escapeHtml(b.sub)}</div>
             ${altHtml}
+            ${swapHtml}
           </div>
           <div class="actions">
             <a class="link-btn health-link" title="약학정보원에서 상세정보 보기" href="${healthLink}" target="_blank" rel="noopener">약학정보원</a>
@@ -424,6 +505,22 @@
     el.basketList.querySelectorAll(".reminder-add-btn").forEach((btn) => {
       btn.addEventListener("click", () => addReminder(btn.getAttribute("data-label")));
     });
+    el.basketList.querySelectorAll(".swap-toggle-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const uid = btn.getAttribute("data-uid");
+        const panel = el.basketList.querySelector(`.swap-panel[data-uid="${cssEscape(uid)}"]`);
+        if (panel) panel.hidden = !panel.hidden;
+      });
+    });
+    el.basketList.querySelectorAll(".swap-option-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        swapBasketItem(btn.getAttribute("data-uid"), btn.getAttribute("data-code"));
+      });
+    });
+  }
+
+  function cssEscape(value) {
+    return window.CSS && CSS.escape ? CSS.escape(value) : value.replace(/["\\]/g, "\\$&");
   }
 
   // ---------- DUR 분석 ----------
@@ -554,6 +651,24 @@
     return found;
   }
 
+  // 규칙 설명/관리방안 원문 안에서 등장하는 어려운 의학 용어만 골라 쉬운 설명을 붙인다.
+  // (성분마다 새로 설명을 지어내지 않고, 이미 공식 데이터에 있는 문장 안의 용어만 풀이한다)
+  function findGlossaryMatches(...texts) {
+    if (typeof LAY_GLOSSARY === "undefined") return [];
+    const combined = texts.filter(Boolean).join(" ");
+    if (!combined) return [];
+    const seen = new Set();
+    const matches = [];
+    for (const g of LAY_GLOSSARY) {
+      if (seen.has(g.term)) continue;
+      if (combined.includes(g.term)) {
+        seen.add(g.term);
+        matches.push(g);
+      }
+    }
+    return matches;
+  }
+
   // 발견된 항목들을 훑어 "종합 위험도"를 한 줄로 요약한다. 카드를 하나하나 안 읽어도
   // 맨 위에서 심각성을 바로 파악할 수 있게 하기 위함(특히 스크롤이 부담스러운 사용자).
   function buildRiskSummary(matches) {
@@ -629,15 +744,30 @@
         const pairCount = m.rule.product_pair_count;
 
         const badgeText = m.rule.category || severityLabel(bucket);
+        // "내 정보" 탭에 65세 이상으로 등록해둔 경우, 노인주의 항목임이 확실한 것만
+        // 강조한다(특정연령대금기는 API 원문이 자유 서술형이라 나이를 안전하게
+        // 자동판별할 수 없어 여기서는 강조하지 않는다).
+        const isElderlyMatch = profile.ageRange === "65-120" && m.rule.severity === "elderly-caution";
+        const glossaryMatches = findGlossaryMatches(m.rule.description, m.rule.management);
 
         return `
         <div class="result-card ${bucket}">
           <span class="result-badge">${escapeHtml(badgeText)}</span>
+          ${isElderlyMatch ? '<span class="result-highlight">👤 내 연령대 해당</span>' : ""}
           <p class="result-title">${escapeHtml(names)}</p>
 
           <div class="lay-only">
             ${m.rule.description ? `<p class="result-desc">${escapeHtml(m.rule.description)}</p>` : ""}
             <p class="result-advice">${escapeHtml(severityAdvice(bucket, m.rule.category))}</p>
+            ${m.rule.management ? `<p class="result-tip">✅ ${escapeHtml(m.rule.management)}</p>` : ""}
+            ${
+              glossaryMatches.length
+                ? `<details class="result-glossary">
+                     <summary>🔤 어려운 용어 설명 (${glossaryMatches.length})</summary>
+                     <ul>${glossaryMatches.map((g) => `<li><strong>${escapeHtml(g.term)}</strong>: ${escapeHtml(g.explain)}</li>`).join("")}</ul>
+                   </details>`
+                : ""
+            }
           </div>
 
           <div class="expert-only">
@@ -812,6 +942,55 @@
   }
 
   setInterval(checkReminders, 20000);
+
+  // ---------- 탭 메뉴 ----------
+  document.querySelectorAll(".tab-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = btn.getAttribute("data-tab");
+      document.querySelectorAll(".tab-btn").forEach((b) => {
+        b.classList.toggle("active", b === btn);
+        b.setAttribute("aria-selected", b === btn ? "true" : "false");
+      });
+      document.querySelectorAll(".tab-panel").forEach((panel) => {
+        panel.hidden = panel.getAttribute("data-panel") !== target;
+      });
+    });
+  });
+
+  // ---------- 내 정보(나이대/성별) - 로그인 없이 이 브라우저에만 저장 ----------
+  const PROFILE_KEY = "dur_profile";
+
+  function loadProfile() {
+    try {
+      const raw = localStorage.getItem(PROFILE_KEY);
+      return raw ? JSON.parse(raw) : { ageRange: "", sex: "" };
+    } catch {
+      return { ageRange: "", sex: "" };
+    }
+  }
+
+  let profile = loadProfile();
+
+  function applyProfileToInputs() {
+    el.profileAgeRange.value = profile.ageRange || "";
+    el.profileSex.value = profile.sex || "";
+  }
+
+  function saveProfile() {
+    profile = { ageRange: el.profileAgeRange.value, sex: el.profileSex.value };
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    renderResults();
+  }
+
+  applyProfileToInputs();
+  el.profileAgeRange.addEventListener("change", saveProfile);
+  el.profileSex.addEventListener("change", saveProfile);
+  el.profileClearBtn.addEventListener("click", () => {
+    profile = { ageRange: "", sex: "" };
+    localStorage.removeItem(PROFILE_KEY);
+    applyProfileToInputs();
+    renderResults();
+  });
 
   // ---------- 모드 전환 ----------
   el.modeLayBtn.addEventListener("click", () => setMode("lay"));
