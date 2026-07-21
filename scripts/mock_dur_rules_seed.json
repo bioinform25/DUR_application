@@ -72,6 +72,15 @@
       "title": "아미오다론염산염 (노인주의)",
       "description": "고령 환자에서 갑상선 기능 이상, 폐독성, 부정맥 등의 이상반응 위험이 높아 신중한 투여가 필요합니다.",
       "management": "정기적인 갑상선·폐기능 모니터링이 권장됩니다."
+    },
+    {
+      "id": "MOCK-009",
+      "category": "임부금기",
+      "severity": "pregnancy-caution",
+      "ingredient_keys": ["aminophylline"],
+      "title": "아미노필린 (임부금기)",
+      "description": "동물실험에서 기형발생 보고 및 신생아 구토, 신경과민 가능성이 있어 임신 중 사용에 주의가 필요합니다.",
+      "management": "임신 중이거나 임신 계획이 있다면 반드시 처방의·약사와 상의해야 합니다."
     }
   ],
   "duplicate_groups": {

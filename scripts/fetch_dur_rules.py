@@ -18,11 +18,13 @@ API 키가 없으면(로컬 최초 실행, PR 미리보기 등) scripts/mock_dur
   미리 정해진 쌍이 아니라 '같은 그룹에 속하는지'로 런타임에 판정해야 해서, 다른
   오퍼레이션들과 달리 rules 배열이 아니라 duplicate_groups(효능군 -> 성분키 목록)
   형태로 별도 저장한다.
+- getPwnmTabooInfoList03       : 임부금기 (성분 단일 단위, 다른 단일성분 카테고리와
+  응답 구조 동일 - 실제 서비스키로 호출 확인함, 2026-07 기준 16,023건)
 
-같은 서비스 그룹에 임부금기, 서방정분할주의도 있다고 알려져 있으나 정확한
-오퍼레이션 이름을 확인하지 못했다(추정 이름들 모두 404). data.go.kr 마이페이지의
-Swagger 문서에서 정확한 이름을 확인하면 동일한 fetch_single_ingredient_category()
-패턴으로 손쉽게 추가할 수 있다.
+같은 서비스 그룹에 서방정분할주의도 있다고 알려져 있으나 정확한 오퍼레이션 이름을
+확인하지 못했다(추정 이름들 모두 404). data.go.kr 마이페이지의 Swagger 문서에서
+정확한 이름을 확인하면 동일한 fetch_single_ingredient_category() 패턴으로 손쉽게
+추가할 수 있다.
 """
 import json
 import math
@@ -53,6 +55,7 @@ URL_SPCIFY_AGRDE = f"{API_BASE}/getSpcifyAgrdeTabooInfoList03"
 URL_MDCTN_PD = f"{API_BASE}/getMdctnPdAtentInfoList03"
 URL_CPCTY = f"{API_BASE}/getCpctyAtentInfoList03"
 URL_EFCY_DPLCT = f"{API_BASE}/getEfcyDplctInfoList03"
+URL_PWNM_TABOO = f"{API_BASE}/getPwnmTabooInfoList03"
 
 NUM_OF_ROWS = 500  # 이 오퍼레이션들이 허용하는 페이지당 최대 건수
 MAX_REFERENCE_ITEMS = 3  # 성분 조합당 예시로 보여줄 실제 제품명 개수
@@ -341,6 +344,10 @@ def main() -> int:
                 service_key, URL_CPCTY, "CPCTY", "dose-caution",
                 "용량 조절이 특히 중요한 성분입니다. 정해진 용량을 초과하지 않도록 주의해야 합니다.", "용량주의",
             )
+            pregnancy_rules = fetch_single_ingredient_category(
+                service_key, URL_PWNM_TABOO, "PWNM", "pregnancy-caution",
+                "임신 중 사용 시 태아에 위험할 수 있어 주의가 필요한 성분입니다.", "임부금기",
+            )
             duplicate_groups = fetch_efcy_dplct(service_key)
         except Exception as exc:  # noqa: BLE001
             print(f"[fetch_dur_rules] API 호출 실패, 목업으로 대체합니다: {exc}")
@@ -349,8 +356,8 @@ def main() -> int:
             duplicate_groups = seed.get("duplicate_groups", {})
             source = f"mock-fallback (API 오류: {exc})"
         else:
-            rules = taboo_rules + elderly_rules + age_rules + duration_rules + dose_rules
-            source = "data.go.kr DUR품목정보 API (병용금기+노인주의+특정연령대금기+투여기간주의+용량주의+효능군중복주의)"
+            rules = taboo_rules + elderly_rules + age_rules + duration_rules + dose_rules + pregnancy_rules
+            source = "data.go.kr DUR품목정보 API (병용금기+노인주의+특정연령대금기+투여기간주의+용량주의+효능군중복주의+임부금기)"
 
     changelog = compute_changelog(old_out, rules, duplicate_groups)
 

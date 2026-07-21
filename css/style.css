@@ -1393,6 +1393,48 @@ header.top p.subtitle {
 .risk-banner.duplicate { background: var(--dup-bg); border-color: var(--dup-border); color: var(--dup-text); }
 .risk-banner.advisory { background: var(--info-bg); border-color: var(--info-border); color: var(--info-text); }
 
+.result-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 14px;
+}
+.result-filter-chip {
+  font-size: calc(13.5px * var(--font-zoom, 1));
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text-sub);
+  cursor: pointer;
+}
+.result-filter-chip.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.result-section { margin-bottom: 14px; }
+.result-section-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: calc(15px * var(--font-zoom, 1));
+  font-weight: 800;
+  color: var(--text);
+  cursor: pointer;
+}
+.result-section-chevron { color: var(--text-sub); font-size: calc(12px * var(--font-zoom, 1)); }
+.result-section-count { margin-left: auto; color: var(--text-sub); font-weight: 600; }
+.result-section-body { padding-top: 10px; }
+
 .result-card {
   border-radius: 12px;
   border: 2px solid;
@@ -1594,6 +1636,10 @@ body.mode-expert .lay-only { display: none; }
   /* 인쇄물은 화면 모드와 무관하게 상담에 필요한 상세 정보를 모두 보여준다 */
   .lay-only { display: none !important; }
   .expert-only { display: block !important; }
+
+  /* 화면에서 접어둔 심각도 섹션도 인쇄물에는 전부 펼쳐서 보여준다 */
+  .result-section-body[hidden] { display: block !important; }
+  .result-filter-row { display: none !important; }
 
   .card {
     box-shadow: none;

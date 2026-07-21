@@ -1027,7 +1027,7 @@
     if (severity === "caution") return "caution";
     if (severity === "food-interaction") return "food-interaction";
     if (severity === "duplicate") return "duplicate";
-    if (["elderly-caution", "age-restricted", "duration-caution", "dose-caution"].includes(severity)) {
+    if (["elderly-caution", "age-restricted", "duration-caution", "dose-caution", "pregnancy-caution"].includes(severity)) {
       return "advisory";
     }
     return "other";
@@ -1230,6 +1230,12 @@
     };
   }
 
+  // 결과 화면이 한 번에 다 펼쳐져 있으면 너무 난잡해 보인다는 피드백에 따라,
+  // 병용금기(가장 중요)만 기본으로 펼치고 나머지는 접어둔 채 심각도별 섹션으로
+  // 묶는다. 필터 칩으로 특정 종류만 골라볼 수도 있다. 세션 동안만 유지(새로고침하면 초기화).
+  let resultsFilter = "all";
+  const expandedBuckets = new Set(["contraindicated"]);
+
   // 바구니 전체를 훑어 알레르기 등록 성분과 겹치는 약이 하나라도 있으면 상단에 띄울 배너 HTML.
   function buildAllergyBanner() {
     const hits = [];
@@ -1278,56 +1284,104 @@
         <p class="risk-headline">${escapeHtml(risk.headline)}</p>
       </div>`;
 
-    const cards = matches
-      .map((m) => {
-        const bucket = severityBucket(m.rule.severity);
-        const names = m.items.map((it) => it.label).join(" + ");
-        const refItems = (m.rule.reference_items || []).filter(Boolean).join(", ");
-        const ingredientKeyLabel = (m.rule.ingredient_keys || []).map(prettifyKey).join(" ↔ ");
-        const pairCount = m.rule.product_pair_count;
+    // 심각도(버킷)별로 묶어서 섹션으로 만든다 - order 배열 순서를 그대로 따르되
+    // 실제 매칭이 있는 버킷만 표시한다.
+    const buckets = {};
+    for (const m of matches) {
+      const b = severityBucket(m.rule.severity);
+      (buckets[b] = buckets[b] || []).push(m);
+    }
+    const bucketOrder = order.filter((b) => buckets[b] && buckets[b].length);
 
-        const badgeText = m.rule.category || severityLabel(bucket);
-        // "내 정보" 탭에 65세 이상으로 등록해둔 경우, 노인주의 항목임이 확실한 것만
-        // 강조한다(특정연령대금기는 API 원문이 자유 서술형이라 나이를 안전하게
-        // 자동판별할 수 없어 여기서는 강조하지 않는다).
-        const isElderlyMatch = profile.ageRange === "65-120" && m.rule.severity === "elderly-caution";
-        const glossaryMatches = findGlossaryMatches(m.rule.description, m.rule.management);
+    const filterChips = `
+      <div class="result-filter-row no-print">
+        <button type="button" class="result-filter-chip ${resultsFilter === "all" ? "active" : ""}" data-filter="all">전체 (${matches.length})</button>
+        ${bucketOrder
+          .map(
+            (b) => `<button type="button" class="result-filter-chip ${resultsFilter === b ? "active" : ""}" data-filter="${b}">${escapeHtml(severityLabel(b))} (${buckets[b].length})</button>`
+          )
+          .join("")}
+      </div>`;
 
+    const sections = bucketOrder
+      .filter((b) => resultsFilter === "all" || resultsFilter === b)
+      .map((b) => {
+        const isOpen = expandedBuckets.has(b);
+        const cardsHtml = buckets[b].map((m) => buildResultCardHtml(m, b)).join("");
         return `
-        <div class="result-card ${bucket}">
-          <span class="result-badge">${escapeHtml(badgeText)}</span>
-          ${isElderlyMatch ? '<span class="result-highlight">👤 내 연령대 해당</span>' : ""}
-          <p class="result-title">${escapeHtml(names)}</p>
-
-          <div class="lay-only">
-            ${m.rule.description ? `<p class="result-desc">${escapeHtml(m.rule.description)}</p>` : ""}
-            <p class="result-advice">${escapeHtml(severityAdvice(bucket, m.rule.category))}</p>
-            ${m.rule.management ? `<p class="result-tip">✅ ${escapeHtml(m.rule.management)}</p>` : ""}
-            ${
-              glossaryMatches.length
-                ? `<details class="result-glossary">
-                     <summary>🔤 어려운 용어 설명 (${glossaryMatches.length})</summary>
-                     <ul>${glossaryMatches.map((g) => `<li><strong>${escapeHtml(g.term)}</strong>: ${escapeHtml(g.explain)}</li>`).join("")}</ul>
-                   </details>`
-                : ""
-            }
-          </div>
-
-          <div class="expert-only">
-            <p class="result-desc">${escapeHtml(m.rule.description || "등록된 상세 설명 없음")}</p>
-            ${m.rule.management ? `<p class="result-manage">비고: ${escapeHtml(m.rule.management)}</p>` : ""}
-            <p class="result-meta">
-              분류: ${escapeHtml(m.rule.category || "")} · 규칙 ID: ${escapeHtml(m.rule.id || "")}<br>
-              성분 매칭: ${escapeHtml(ingredientKeyLabel)}
-              ${pairCount ? ` · 등록된 실제 제품 조합: ${pairCount.toLocaleString()}건` : ""}
-              ${refItems ? "<br>참고 품목 예시: " + escapeHtml(refItems) : ""}
-            </p>
-          </div>
+        <div class="result-section">
+          <button type="button" class="result-section-toggle no-print" data-bucket="${b}">
+            <span class="result-section-chevron">${isOpen ? "▼" : "▶"}</span>
+            <span class="result-section-label">${escapeHtml(severityLabel(b))}</span>
+            <span class="result-section-count">${buckets[b].length}건</span>
+          </button>
+          <div class="result-section-body" ${isOpen ? "" : "hidden"}>${cardsHtml}</div>
         </div>`;
       })
       .join("");
 
-    el.results.innerHTML = allergyBanner + summary + cards;
+    el.results.innerHTML = allergyBanner + summary + filterChips + sections;
+
+    el.results.querySelectorAll(".result-filter-chip").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        resultsFilter = btn.getAttribute("data-filter");
+        renderResults();
+      });
+    });
+    el.results.querySelectorAll(".result-section-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const b = btn.getAttribute("data-bucket");
+        if (expandedBuckets.has(b)) expandedBuckets.delete(b);
+        else expandedBuckets.add(b);
+        renderResults();
+      });
+    });
+  }
+
+  function buildResultCardHtml(m, bucket) {
+    const names = m.items.map((it) => it.label).join(" + ");
+    const refItems = (m.rule.reference_items || []).filter(Boolean).join(", ");
+    const ingredientKeyLabel = (m.rule.ingredient_keys || []).map(prettifyKey).join(" ↔ ");
+    const pairCount = m.rule.product_pair_count;
+
+    const badgeText = m.rule.category || severityLabel(bucket);
+    // "내 정보" 탭에 65세 이상으로 등록해둔 경우, 노인주의 항목임이 확실한 것만
+    // 강조한다(특정연령대금기는 API 원문이 자유 서술형이라 나이를 안전하게
+    // 자동판별할 수 없어 여기서는 강조하지 않는다).
+    const isElderlyMatch = profile.ageRange === "65-120" && m.rule.severity === "elderly-caution";
+    const glossaryMatches = findGlossaryMatches(m.rule.description, m.rule.management);
+
+    return `
+    <div class="result-card ${bucket}">
+      <span class="result-badge">${escapeHtml(badgeText)}</span>
+      ${isElderlyMatch ? '<span class="result-highlight">👤 내 연령대 해당</span>' : ""}
+      <p class="result-title">${escapeHtml(names)}</p>
+
+      <div class="lay-only">
+        ${m.rule.description ? `<p class="result-desc">${escapeHtml(m.rule.description)}</p>` : ""}
+        <p class="result-advice">${escapeHtml(severityAdvice(bucket, m.rule.category))}</p>
+        ${m.rule.management ? `<p class="result-tip">✅ ${escapeHtml(m.rule.management)}</p>` : ""}
+        ${
+          glossaryMatches.length
+            ? `<details class="result-glossary">
+                 <summary>🔤 어려운 용어 설명 (${glossaryMatches.length})</summary>
+                 <ul>${glossaryMatches.map((g) => `<li><strong>${escapeHtml(g.term)}</strong>: ${escapeHtml(g.explain)}</li>`).join("")}</ul>
+               </details>`
+            : ""
+        }
+      </div>
+
+      <div class="expert-only">
+        <p class="result-desc">${escapeHtml(m.rule.description || "등록된 상세 설명 없음")}</p>
+        ${m.rule.management ? `<p class="result-manage">비고: ${escapeHtml(m.rule.management)}</p>` : ""}
+        <p class="result-meta">
+          분류: ${escapeHtml(m.rule.category || "")} · 규칙 ID: ${escapeHtml(m.rule.id || "")}<br>
+          성분 매칭: ${escapeHtml(ingredientKeyLabel)}
+          ${pairCount ? ` · 등록된 실제 제품 조합: ${pairCount.toLocaleString()}건` : ""}
+          ${refItems ? "<br>참고 품목 예시: " + escapeHtml(refItems) : ""}
+        </p>
+      </div>
+    </div>`;
   }
 
   function escapeHtml(str) {
