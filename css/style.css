@@ -966,6 +966,37 @@ header.top p.subtitle {
 }
 .narcotic-message { font-size: calc(12.5px * var(--font-zoom, 1)); }
 
+.safety-letter-badge-row { margin: 4px 0 8px; }
+.safety-letter-badge {
+  display: inline-block;
+  font-size: calc(12.5px * var(--font-zoom, 1));
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--info-bg);
+  color: var(--info-border);
+}
+
+.safety-letter-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 480px;
+  overflow-y: auto;
+}
+.safety-letter-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.safety-letter-date { font-size: calc(12px * var(--font-zoom, 1)); color: var(--text-sub); margin-bottom: 2px; }
+.safety-letter-title { font-weight: 700; font-size: calc(14.5px * var(--font-zoom, 1)); margin-bottom: 4px; }
+.safety-letter-summary { font-size: calc(13.5px * var(--font-zoom, 1)); color: var(--text-sub); margin-bottom: 6px; }
+
 /* ---------- 복약 알림 ---------- */
 .today-schedule-title {
   font-size: calc(16px * var(--font-zoom, 1));

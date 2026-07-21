@@ -50,6 +50,12 @@ jobs:
           DUR_API_KEY: ${{ secrets.DUR_API_KEY }}
         run: python scripts/fetch_narcotic_classification.py
 
+      - name: 의약품 안전성서한 정보 갱신
+        shell: bash
+        env:
+          DUR_API_KEY: ${{ secrets.DUR_API_KEY }}
+        run: python scripts/fetch_safety_letters.py
+
       - name: 변경사항 커밋 및 푸시
         shell: bash
         run: |

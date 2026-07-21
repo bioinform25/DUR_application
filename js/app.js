@@ -90,6 +90,7 @@
     allergySuggestions: document.getElementById("allergy-suggestions"),
     allergyList: document.getElementById("allergy-list"),
     allergyEmptyMsg: document.getElementById("allergy-empty-msg"),
+    safetyLetterList: document.getElementById("safety-letter-list"),
     pillFinderBtn: document.getElementById("pill-finder-btn"),
     pillFinderPanel: document.getElementById("pill-finder-panel"),
     pillFinderShape: document.getElementById("pill-finder-shape"),
@@ -141,6 +142,18 @@
       state.narcoticSubstances = [];
     }
 
+    // 의약품 안전성서한(선택 데이터, 전문가모드 전용) - 없어도 핵심 기능엔 영향 없음.
+    state.safetyLetters = [];
+    try {
+      const safRes = await fetch("data/safety_letters.json");
+      if (safRes.ok) {
+        const safData = await safRes.json();
+        state.safetyLetters = safData.letters || [];
+      }
+    } catch {
+      state.safetyLetters = [];
+    }
+
     buildPillFinderOptions();
 
     // 효능군중복: "효능군 -> 소속 성분키 목록"을 "성분키 -> 소속 효능군 목록"으로
@@ -158,6 +171,7 @@
     renderDataMeta();
     renderBasket();
     renderResults();
+    renderSafetyLetterList();
   }
 
   function renderDataMeta() {
@@ -729,6 +743,37 @@
     return null;
   }
 
+  // 안전성서한은 성분명이 구조화된 필드로 안 오고 제목/본문 자유 텍스트에만
+  // 있어서, 바구니 약의 정확한 상품명이 그 텍스트에 포함되는지로 "추정 매칭"만
+  // 한다 - 완벽하지 않으니(표현이 다르면 놓칠 수 있음) 결과 옆에 항상 전체
+  // 목록도 같이 보여준다(renderSafetyLetterList).
+  function findRelatedSafetyLetters(productLabel) {
+    if (!productLabel || !state.safetyLetters.length) return [];
+    return state.safetyLetters.filter(
+      (l) => l.title.includes(productLabel) || l.content.includes(productLabel)
+    );
+  }
+
+  function renderSafetyLetterList() {
+    if (!el.safetyLetterList) return;
+    const recent = state.safetyLetters.slice(0, 15);
+    if (!recent.length) {
+      el.safetyLetterList.innerHTML = '<p class="basket-empty">불러온 안전성서한이 없습니다.</p>';
+      return;
+    }
+    el.safetyLetterList.innerHTML = recent
+      .map(
+        (l) => `
+      <li class="safety-letter-item">
+        <div class="safety-letter-date">${escapeHtml(l.date)} · ${escapeHtml(l.category)}</div>
+        <div class="safety-letter-title">${escapeHtml(l.title)}</div>
+        ${l.summary ? `<div class="safety-letter-summary">${escapeHtml(l.summary)}</div>` : ""}
+        ${l.attach_url ? `<a class="link-btn" href="${escapeHtml(l.attach_url)}" target="_blank" rel="noopener">원문 보기</a>` : ""}
+      </li>`
+      )
+      .join("");
+  }
+
   function swapBasketItem(oldUid, newProductCode) {
     if (!assertEditable()) return;
     const idx = state.basket.findIndex((b) => b.uid === oldUid);
@@ -947,6 +992,13 @@
              </div>`
           : "";
 
+        const relatedLetters = findRelatedSafetyLetters(b.label);
+        const safetyLetterHtml = relatedLetters.length
+          ? `<div class="expert-only safety-letter-badge-row">
+               <span class="safety-letter-badge">📋 관련 안전성서한 ${relatedLetters.length}건 (자동 검색, 정확하지 않을 수 있음)</span>
+             </div>`
+          : "";
+
         return `
         <li class="basket-item">
           ${pillThumb}
@@ -955,6 +1007,7 @@
             <div class="meta">${escapeHtml(b.sub)}</div>
             ${allergyHtml}
             ${narcoticHtml}
+            ${safetyLetterHtml}
             ${altHtml}
             ${swapHtml}
             ${partnersHtml}
