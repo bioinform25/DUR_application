@@ -48,6 +48,7 @@
     <button type="button" class="tab-btn" data-tab="reminders" role="tab" aria-selected="false">⏰ 복약 알림</button>
     <button type="button" class="tab-btn" data-tab="family" role="tab" aria-selected="false">👥 공유</button>
     <button type="button" class="tab-btn" data-tab="info" role="tab" aria-selected="false">⚙ 내 정보</button>
+    <button type="button" class="tab-btn" data-tab="chatbot" role="tab" aria-selected="false">🤖 알리봇</button>
   </nav>
 
   <p class="webview-warning no-print" id="webview-warning" hidden>
@@ -140,6 +141,7 @@
     <div class="card-header-row">
       <h2>3. 병용금기 · 주의사항 분석 결과</h2>
       <div class="header-btn-group no-print">
+        <button type="button" id="tts-btn" class="print-btn">🔊 읽어주기</button>
         <button type="button" id="emergency-card-btn" class="print-btn">🚨 응급 카드</button>
         <button type="button" id="print-btn" class="print-btn">🖨 인쇄 / PDF 저장</button>
       </div>
@@ -261,6 +263,23 @@
   </section>
 
   <section class="card no-print">
+    <h2>🚫 약물 알레르기 등록</h2>
+    <p class="reminder-hint">
+      과거 특정 성분에 알레르기·부작용 반응이 있었다면 등록해두세요. 이후 그 성분이 포함된 약을
+      바구니에 담으면 강하게 경고해드리고, 응급 카드에도 항상 표시됩니다. 이 목록은 이 브라우저에만 저장됩니다.
+    </p>
+    <div class="allergy-form">
+      <input type="text" id="allergy-memo-input" placeholder="반응 메모 (선택, 예: 두드러기 남)" />
+      <div class="search-wrap">
+        <input type="text" id="allergy-search-input" placeholder="알레르기가 있는 성분·약 이름을 검색하세요" autocomplete="off" />
+        <div id="allergy-suggestions"></div>
+      </div>
+    </div>
+    <ul id="allergy-list" class="allergy-list"></ul>
+    <p class="basket-empty" id="allergy-empty-msg">등록된 알레르기가 없습니다.</p>
+  </section>
+
+  <section class="card no-print">
     <h2>📝 부작용·특이사항 메모</h2>
     <p class="reminder-hint">
       약을 먹고 느낀 증상 등을 날짜별로 간단히 기록해두세요. 나중에 의사·약사와 상담할 때
@@ -292,6 +311,30 @@
 
   </div><!-- /tab-panel: info -->
 
+  <div class="tab-panel" data-panel="chatbot" hidden>
+
+  <section class="card no-print chatbot-card">
+    <h2>🤖 알리봇에게 물어보기</h2>
+    <p class="chatbot-disclaimer">
+      ⚠️ 알리봇의 답변은 AI가 생성한 <strong>참고용 정보</strong>이며 의학적 진단·처방이 아닙니다.
+      실제 진단과 치료는 반드시 의사·약사와 상담하세요. 응급 상황이면 즉시 119에 신고하세요.
+    </p>
+    <div id="chatbot-messages" class="chatbot-messages">
+      <p class="chatbot-empty" id="chatbot-empty-msg">약이나 질병에 대해 궁금한 점을 편하게 물어보세요.<br>예: "타이레놀은 하루 몇 알까지 먹어도 되나요?"</p>
+    </div>
+    <p class="chatbot-status" id="chatbot-status" hidden></p>
+    <div class="chatbot-input-row">
+      <input type="text" id="chatbot-input" placeholder="궁금한 점을 입력하세요" autocomplete="off" />
+      <button type="button" id="chatbot-send-btn" class="print-btn">보내기</button>
+    </div>
+    <div class="chatbot-footer-row">
+      <span class="chatbot-usage" id="chatbot-usage"></span>
+      <button type="button" id="chatbot-clear-btn" class="clear-btn">대화 초기화</button>
+    </div>
+  </section>
+
+  </div><!-- /tab-panel: chatbot -->
+
   <p class="disclaimer">
     본 서비스는 건강보험심사평가원 약제급여목록표와 공공 DUR 데이터를 바탕으로 한 참고용 프로토타입이며,
     의료진·약사의 처방 및 상담을 대체하지 않습니다. 실제 복약 결정은 반드시 의사 또는 약사와 상의하세요.
@@ -312,7 +355,10 @@
     </div>
     <p class="emergency-card-time" id="emergency-card-time"></p>
     <div id="emergency-card-body"></div>
-    <button type="button" id="emergency-card-print-btn" class="print-btn no-print">🖨 이 화면 인쇄</button>
+    <div class="emergency-card-actions no-print">
+      <button type="button" id="emergency-tts-btn" class="print-btn no-print">🔊 읽어주기</button>
+      <button type="button" id="emergency-card-print-btn" class="print-btn no-print">🖨 이 화면 인쇄</button>
+    </div>
   </div>
 </div>
 
@@ -327,5 +373,7 @@
 <script src="js/lay_glossary.js"></script>
 <script src="js/family-sync.js" defer></script>
 <script src="js/app.js"></script>
+<!-- 알리봇 챗봇(선택 기능, Gemini). 이 모듈이 로드/초기화에 실패해도 다른 기능에는 영향 없음 -->
+<script type="module" src="js/chatbot.js"></script>
 </body>
 </html>

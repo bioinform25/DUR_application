@@ -54,6 +54,8 @@
     emergencyCardTime: document.getElementById("emergency-card-time"),
     emergencyCardBody: document.getElementById("emergency-card-body"),
     emergencyCardPrintBtn: document.getElementById("emergency-card-print-btn"),
+    ttsBtn: document.getElementById("tts-btn"),
+    emergencyTtsBtn: document.getElementById("emergency-tts-btn"),
     printDate: document.getElementById("print-date"),
     reminderList: document.getElementById("reminder-list"),
     reminderEmptyMsg: document.getElementById("reminder-empty-msg"),
@@ -83,6 +85,11 @@
     medicineAddBtn: document.getElementById("medicine-add-btn"),
     medicineList: document.getElementById("medicine-list"),
     medicineEmptyMsg: document.getElementById("medicine-empty-msg"),
+    allergyMemoInput: document.getElementById("allergy-memo-input"),
+    allergySearchInput: document.getElementById("allergy-search-input"),
+    allergySuggestions: document.getElementById("allergy-suggestions"),
+    allergyList: document.getElementById("allergy-list"),
+    allergyEmptyMsg: document.getElementById("allergy-empty-msg"),
     pillFinderBtn: document.getElementById("pill-finder-btn"),
     pillFinderPanel: document.getElementById("pill-finder-panel"),
     pillFinderShape: document.getElementById("pill-finder-shape"),
@@ -933,12 +940,20 @@
              </div>`
           : "";
 
+        const allergyMatches = matchAllergies(b.ingredientKeys);
+        const allergyHtml = allergyMatches.length
+          ? `<div class="allergy-alert">
+               🚨 등록하신 알레르기 성분 포함: ${allergyMatches.map((a) => escapeHtml(a.label)).join(", ")}
+             </div>`
+          : "";
+
         return `
         <li class="basket-item">
           ${pillThumb}
           <div class="info">
             <div class="name">${escapeHtml(b.label)}</div>
             <div class="meta">${escapeHtml(b.sub)}</div>
+            ${allergyHtml}
             ${narcoticHtml}
             ${altHtml}
             ${swapHtml}
@@ -1215,8 +1230,24 @@
     };
   }
 
+  // 바구니 전체를 훑어 알레르기 등록 성분과 겹치는 약이 하나라도 있으면 상단에 띄울 배너 HTML.
+  function buildAllergyBanner() {
+    const hits = [];
+    for (const item of state.basket) {
+      const found = matchAllergies(item.ingredientKeys);
+      if (found.length) hits.push({ item, found });
+    }
+    if (!hits.length) return "";
+    const lines = hits
+      .map((h) => `${escapeHtml(h.item.label)} (${h.found.map((a) => escapeHtml(a.label)).join(", ")})`)
+      .join("<br>");
+    return `<div class="allergy-alert allergy-alert-top">🚨 등록하신 알레르기 성분이 포함된 약이 있습니다<br>${lines}</div>`;
+  }
+
   function renderResults() {
     if (!state.drugsData || !state.rulesData) return;
+
+    const allergyBanner = buildAllergyBanner();
 
     if (state.basket.length === 0) {
       el.results.innerHTML = '<p class="basket-empty">약을 2개 이상 담으면 병용금기 여부를 분석합니다. (1개만 담아도 노인주의 등 단일 약물 주의사항은 표시됩니다.)</p>';
@@ -1227,6 +1258,7 @@
 
     if (matches.length === 0) {
       el.results.innerHTML =
+        allergyBanner +
         '<div class="no-result">현재 담긴 약들 사이에서는 등록된 병용금기·주의사항이 발견되지 않았습니다.<br>' +
         '<span style="font-weight:400;font-size:14px;">※ 본 데이터베이스에 없는 상호작용도 있을 수 있으니, 최종 확인은 약사·의사와 상의하세요.</span></div>';
       return;
@@ -1295,7 +1327,7 @@
       })
       .join("");
 
-    el.results.innerHTML = summary + cards;
+    el.results.innerHTML = allergyBanner + summary + cards;
   }
 
   function escapeHtml(str) {
@@ -1860,6 +1892,127 @@
   renderSideEffectNotes();
   renderMedicineCabinet();
 
+  // ---------- 약물 알레르기 등록 ----------
+  // DUR 데이터는 "공식 병용금기"만 다루고 개인의 과거 알레르기 이력은 모르기 때문에,
+  // 별도로 등록해두면 검색 결과와 무관하게 항상 우리 쪽에서 성분을 대조해 경고할 수 있다.
+  const ALLERGY_KEY = "dur_allergies";
+  let allergies = loadAllergies();
+
+  function loadAllergies() {
+    try {
+      const raw = localStorage.getItem(ALLERGY_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveAllergies() {
+    localStorage.setItem(ALLERGY_KEY, JSON.stringify(allergies));
+  }
+
+  function addAllergy(entry, memo) {
+    if (!entry || !entry.ingredientKeys || !entry.ingredientKeys.length) return;
+    allergies.push({
+      id: "al" + Date.now(),
+      label: entry.label,
+      ingredientKeys: entry.ingredientKeys,
+      memo: (memo || "").trim(),
+    });
+    saveAllergies();
+    renderAllergyList();
+    renderBasket();
+    renderResults();
+  }
+
+  function removeAllergy(id) {
+    if (!confirm("이 알레르기 등록을 삭제하시겠습니까?")) return;
+    allergies = allergies.filter((a) => a.id !== id);
+    saveAllergies();
+    renderAllergyList();
+    renderBasket();
+    renderResults();
+  }
+
+  // 바구니 약의 ingredientKeys 중 하나라도 등록된 알레르기 성분과 겹치면 매칭된 알레르기들을 반환한다.
+  function matchAllergies(ingredientKeys) {
+    if (!ingredientKeys || !ingredientKeys.length || !allergies.length) return [];
+    return allergies.filter((a) => a.ingredientKeys.some((k) => ingredientKeys.includes(k)));
+  }
+
+  function renderAllergyList() {
+    el.allergyEmptyMsg.style.display = allergies.length ? "none" : "block";
+    el.allergyList.innerHTML = allergies
+      .map(
+        (a) => `
+      <li class="allergy-item">
+        <div class="allergy-info">
+          <div class="allergy-name">${escapeHtml(a.label)}</div>
+          ${a.memo ? `<div class="allergy-memo">${escapeHtml(a.memo)}</div>` : ""}
+        </div>
+        <button class="remove-btn" data-id="${a.id}" title="삭제">×</button>
+      </li>`
+      )
+      .join("");
+    el.allergyList.querySelectorAll(".remove-btn").forEach((btn) => {
+      btn.addEventListener("click", () => removeAllergy(btn.getAttribute("data-id")));
+    });
+  }
+
+  function runAllergySearch() {
+    const q = el.allergySearchInput.value.trim().toLowerCase();
+    if (!q || !state.suggestions.length) {
+      el.allergySuggestions.classList.remove("open");
+      el.allergySuggestions.innerHTML = "";
+      return;
+    }
+    const matches = state.suggestions
+      .filter((s) => s.searchText.includes(q) || s.label.toLowerCase().includes(q))
+      .slice(0, 20);
+
+    if (!matches.length) {
+      el.allergySuggestions.innerHTML = '<div class="suggestion-empty">일치하는 성분·약이 없습니다.</div>';
+      el.allergySuggestions.classList.add("open");
+      return;
+    }
+
+    el.allergySuggestions.innerHTML = matches
+      .map((m, idx) => {
+        const tagLabel = m.kind === "product" ? "상품명" : "성분명";
+        const tagClass = m.kind === "product" ? "product" : "ingredient";
+        return `
+        <div class="suggestion-item" data-idx="${idx}">
+          <div class="suggestion-main">
+            <span class="suggestion-name">${escapeHtml(m.label)}</span>
+            <span class="suggestion-sub">${escapeHtml(m.sub)}</span>
+          </div>
+          <span class="tag ${tagClass}">${tagLabel}</span>
+        </div>`;
+      })
+      .join("");
+    el.allergySuggestions.classList.add("open");
+
+    el.allergySuggestions.querySelectorAll(".suggestion-item").forEach((node) => {
+      node.addEventListener("click", () => {
+        const idx = Number(node.getAttribute("data-idx"));
+        addAllergy(matches[idx], el.allergyMemoInput.value);
+        el.allergyMemoInput.value = "";
+        el.allergySearchInput.value = "";
+        el.allergySuggestions.classList.remove("open");
+        el.allergySuggestions.innerHTML = "";
+      });
+    });
+  }
+
+  el.allergySearchInput.addEventListener("input", runAllergySearch);
+  document.addEventListener("click", (e) => {
+    if (!el.allergySearchInput.contains(e.target) && !el.allergySuggestions.contains(e.target)) {
+      el.allergySuggestions.classList.remove("open");
+    }
+  });
+
+  renderAllergyList();
+
   // ---------- 모드 전환 ----------
   el.modeLayBtn.addEventListener("click", () => setMode("lay"));
   el.modeExpertBtn.addEventListener("click", () => setMode("expert"));
@@ -1884,6 +2037,87 @@
     window.print();
   });
 
+  // ---------- 음성으로 읽어주기 (TTS) ----------
+  // 저시력·고령 사용자를 위해 브라우저 내장 SpeechSynthesis만 사용한다(외부 API 없음).
+  function speak(text, btnEl, defaultLabel) {
+    if (!("speechSynthesis" in window)) {
+      alert("이 브라우저는 음성 읽어주기를 지원하지 않습니다.");
+      return;
+    }
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      if (btnEl) btnEl.textContent = defaultLabel;
+      return;
+    }
+    if (!text) return;
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "ko-KR";
+    const koVoice = window.speechSynthesis.getVoices().find((v) => v.lang && v.lang.startsWith("ko"));
+    if (koVoice) utter.voice = koVoice;
+    const reset = () => {
+      if (btnEl) btnEl.textContent = defaultLabel;
+    };
+    utter.onend = reset;
+    utter.onerror = reset;
+    if (btnEl) btnEl.textContent = "⏹ 중지";
+    window.speechSynthesis.speak(utter);
+  }
+
+  function buildResultsSpeechText() {
+    if (!state.basket.length) return "";
+    const parts = [];
+    const allergyHitTexts = [];
+    for (const item of state.basket) {
+      const found = matchAllergies(item.ingredientKeys);
+      if (found.length) allergyHitTexts.push(`${item.label}에 등록하신 알레르기 성분이 포함되어 있습니다.`);
+    }
+    if (allergyHitTexts.length) parts.push("주의. " + allergyHitTexts.join(" "));
+
+    const matches = analyzeBasket();
+    if (!matches.length) {
+      parts.push("현재 담긴 약들 사이에서는 등록된 병용금기, 주의사항이 발견되지 않았습니다.");
+    } else {
+      const risk = buildRiskSummary(matches);
+      parts.push(risk.headline);
+      matches.slice(0, 8).forEach((m) => {
+        const names = m.items.map((it) => it.label).join("와 ");
+        parts.push(`${names}: ${m.rule.category || severityLabel(severityBucket(m.rule.severity))}.`);
+      });
+    }
+    return parts.join(" ");
+  }
+
+  function buildEmergencySpeechText() {
+    const parts = [];
+    if (allergies.length) {
+      parts.push("등록된 알레르기: " + allergies.map((a) => a.label).join(", ") + ".");
+    }
+    if (!state.basket.length) {
+      parts.push("담긴 약이 없습니다.");
+      return parts.join(" ");
+    }
+    parts.push(`현재 복용 중인 약은 총 ${state.basket.length}개입니다: ` + state.basket.map((b) => b.label).join(", ") + ".");
+    const matches = analyzeBasket();
+    const contraindicated = matches.filter((m) => severityBucket(m.rule.severity) === "contraindicated");
+    if (contraindicated.length) {
+      parts.push(`병용금기 조합 ${contraindicated.length}건이 발견되었습니다. 반드시 의료진에게 알리세요.`);
+    }
+    return parts.join(" ");
+  }
+
+  el.ttsBtn.addEventListener("click", () => {
+    const text = buildResultsSpeechText();
+    if (!text) {
+      alert("읽어줄 내용이 없습니다. 먼저 약을 담아주세요.");
+      return;
+    }
+    speak(text, el.ttsBtn, "🔊 읽어주기");
+  });
+
+  el.emergencyTtsBtn.addEventListener("click", () => {
+    speak(buildEmergencySpeechText(), el.emergencyTtsBtn, "🔊 읽어주기");
+  });
+
   // ---------- 응급 상황용 요약 카드 ----------
   // 의식이 없거나 응급실에서 급하게 보여줘야 할 때를 위한 한 화면 요약. 외부 서버로
   // 데이터를 보내는 QR코드 생성 API 등은 건강정보를 제3자에게 노출시킬 위험이 있어
@@ -1891,8 +2125,17 @@
   function renderEmergencyCard() {
     el.emergencyCardTime.textContent = `생성 시각: ${new Date().toLocaleString("ko-KR")}`;
 
+    // 등록된 알레르기는 응급실에서 가장 먼저 알아야 할 정보라, 바구니가 비어 있어도 항상 보여준다.
+    const allergyListHtml = allergies.length
+      ? `<div class="emergency-allergy-box">
+           <strong>🚫 등록된 알레르기</strong>
+           <ul>${allergies.map((a) => `<li>${escapeHtml(a.label)}${a.memo ? ` — ${escapeHtml(a.memo)}` : ""}</li>`).join("")}</ul>
+         </div>`
+      : "";
+
     if (!state.basket.length) {
-      el.emergencyCardBody.innerHTML = "<p>담긴 약이 없습니다. 먼저 '1. 복용 중인 약 검색해서 담기'에서 약을 담아주세요.</p>";
+      el.emergencyCardBody.innerHTML =
+        allergyListHtml + "<p>담긴 약이 없습니다. 먼저 '1. 복용 중인 약 검색해서 담기'에서 약을 담아주세요.</p>";
       return;
     }
 
@@ -1902,11 +2145,13 @@
     const drugRows = state.basket
       .map((b) => {
         const narcotic = findNarcoticClassification(b.ingredientKeys);
+        const allergyMatches = matchAllergies(b.ingredientKeys);
         return `
         <li class="emergency-drug-item">
           <strong>${escapeHtml(b.label)}</strong>
           <div class="emergency-drug-sub">${escapeHtml(b.sub)}</div>
           ${narcotic ? `<span class="emergency-narcotic-tag">⚠️ ${escapeHtml(narcotic.type_code)}</span>` : ""}
+          ${allergyMatches.length ? `<span class="emergency-narcotic-tag emergency-allergy-tag">🚨 알레르기 성분(${allergyMatches.map((a) => escapeHtml(a.label)).join(", ")})</span>` : ""}
         </li>`;
       })
       .join("");
@@ -1919,6 +2164,7 @@
       : "";
 
     el.emergencyCardBody.innerHTML = `
+      ${allergyListHtml}
       <h3>복용 중인 약 (${state.basket.length}개)</h3>
       <ul class="emergency-drug-list">${drugRows}</ul>
       ${warnHtml}
