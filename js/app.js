@@ -7,6 +7,7 @@
     productsByCode: {}, // product_code -> 제품 상세 (저렴한 대체약 비교용)
     pillInfoByCode: {}, // product_code(=EDI_CODE) -> 알약 모양/색깔/사진 (식약처 낱알식별정보)
     narcoticSubstances: [], // 식약처 마약류 약물 및 오남용 정보(향정신성의약품/마약 등 법적 분류)
+    safetyLetters: [], // 식약처 의약품 안전성서한(전문가모드 전용)
     ingredientToGroups: {}, // ingredient_key -> 효능군 이름 목록 (효능군중복 판정용)
     suggestions: [], // 검색 대상 통합 인덱스
     basket: [],       // 담은 약 목록
@@ -1283,11 +1284,25 @@
     };
   }
 
-  // 결과 화면이 한 번에 다 펼쳐져 있으면 너무 난잡해 보인다는 피드백에 따라,
-  // 병용금기(가장 중요)만 기본으로 펼치고 나머지는 접어둔 채 심각도별 섹션으로
-  // 묶는다. 필터 칩으로 특정 종류만 골라볼 수도 있다. 세션 동안만 유지(새로고침하면 초기화).
-  let resultsFilter = "all";
-  const expandedBuckets = new Set(["contraindicated"]);
+  // 결과 화면을 한 번에 다 펼치는 대신, 상단 메뉴(약확인/복약알림/...) 탭과 같은
+  // 방식으로 노인주의·임부금기·용량주의 등 실제 주의사항 종류(테마)별 탭으로 나눠
+  // 보여준다. 세션 동안만 유지(새로고침하면 가장 심각한 테마로 초기화).
+  let activeResultTheme = null;
+
+  // 매칭된 규칙들을 심각도 우선순위로 정렬/그룹핑할 때 공용으로 쓰는 우선순위 목록.
+  // 목록에 없는(향후 추가될 수 있는) severity는 맨 뒤로 밀려 항상 안전하게 표시된다.
+  const SEVERITY_PRIORITY = [
+    "contraindicated",
+    "caution",
+    "food-interaction",
+    "duplicate",
+    "elderly-caution",
+    "age-restricted",
+    "duration-caution",
+    "dose-caution",
+    "pregnancy-caution",
+    "other",
+  ];
 
   // 바구니 전체를 훑어 알레르기 등록 성분과 겹치는 약이 하나라도 있으면 상단에 띄울 배너 HTML.
   function buildAllergyBanner() {
@@ -1323,8 +1338,11 @@
       return;
     }
 
-    const order = ["contraindicated", "caution", "food-interaction", "duplicate", "advisory", "other"];
-    matches.sort((a, b) => order.indexOf(severityBucket(a.rule.severity)) - order.indexOf(severityBucket(b.rule.severity)));
+    matches.sort((a, b) => {
+      const pa = SEVERITY_PRIORITY.indexOf(a.rule.severity);
+      const pb = SEVERITY_PRIORITY.indexOf(b.rule.severity);
+      return (pa === -1 ? 999 : pa) - (pb === -1 ? 999 : pb);
+    });
 
     const risk = buildRiskSummary(matches);
     const summary = `
@@ -1337,55 +1355,44 @@
         <p class="risk-headline">${escapeHtml(risk.headline)}</p>
       </div>`;
 
-    // 심각도(버킷)별로 묶어서 섹션으로 만든다 - order 배열 순서를 그대로 따르되
-    // 실제 매칭이 있는 버킷만 표시한다.
-    const buckets = {};
+    // 심각도(버킷)가 아니라 실제 주의사항 종류(rule.category, 예: 노인주의/임부금기/
+    // 용량주의)별로 나눠 탭으로 보여준다.
+    const themes = {};
     for (const m of matches) {
-      const b = severityBucket(m.rule.severity);
-      (buckets[b] = buckets[b] || []).push(m);
+      const theme = m.rule.category || severityLabel(severityBucket(m.rule.severity));
+      (themes[theme] = themes[theme] || []).push(m);
     }
-    const bucketOrder = order.filter((b) => buckets[b] && buckets[b].length);
+    const themeNames = Object.keys(themes).sort((a, b) => {
+      const pa = SEVERITY_PRIORITY.indexOf(themes[a][0].rule.severity);
+      const pb = SEVERITY_PRIORITY.indexOf(themes[b][0].rule.severity);
+      return (pa === -1 ? 999 : pa) - (pb === -1 ? 999 : pb);
+    });
 
-    const filterChips = `
-      <div class="result-filter-row no-print">
-        <button type="button" class="result-filter-chip ${resultsFilter === "all" ? "active" : ""}" data-filter="all">전체 (${matches.length})</button>
-        ${bucketOrder
+    if (!themeNames.includes(activeResultTheme)) {
+      activeResultTheme = themeNames[0];
+    }
+
+    const themeBar = `
+      <div class="result-theme-bar no-print" role="tablist">
+        ${themeNames
           .map(
-            (b) => `<button type="button" class="result-filter-chip ${resultsFilter === b ? "active" : ""}" data-filter="${b}">${escapeHtml(severityLabel(b))} (${buckets[b].length})</button>`
+            (t) => `<button type="button" class="result-theme-btn ${t === activeResultTheme ? "active" : ""}" data-theme="${escapeHtml(t)}">${escapeHtml(t)} (${themes[t].length})</button>`
           )
           .join("")}
       </div>`;
 
-    const sections = bucketOrder
-      .filter((b) => resultsFilter === "all" || resultsFilter === b)
-      .map((b) => {
-        const isOpen = expandedBuckets.has(b);
-        const cardsHtml = buckets[b].map((m) => buildResultCardHtml(m, b)).join("");
-        return `
-        <div class="result-section">
-          <button type="button" class="result-section-toggle no-print" data-bucket="${b}">
-            <span class="result-section-chevron">${isOpen ? "▼" : "▶"}</span>
-            <span class="result-section-label">${escapeHtml(severityLabel(b))}</span>
-            <span class="result-section-count">${buckets[b].length}건</span>
-          </button>
-          <div class="result-section-body" ${isOpen ? "" : "hidden"}>${cardsHtml}</div>
-        </div>`;
+    const panels = themeNames
+      .map((t) => {
+        const cardsHtml = themes[t].map((m) => buildResultCardHtml(m, severityBucket(m.rule.severity))).join("");
+        return `<div class="result-theme-panel" data-theme="${escapeHtml(t)}" ${t === activeResultTheme ? "" : "hidden"}>${cardsHtml}</div>`;
       })
       .join("");
 
-    el.results.innerHTML = allergyBanner + summary + filterChips + sections;
+    el.results.innerHTML = allergyBanner + summary + themeBar + panels;
 
-    el.results.querySelectorAll(".result-filter-chip").forEach((btn) => {
+    el.results.querySelectorAll(".result-theme-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        resultsFilter = btn.getAttribute("data-filter");
-        renderResults();
-      });
-    });
-    el.results.querySelectorAll(".result-section-toggle").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const b = btn.getAttribute("data-bucket");
-        if (expandedBuckets.has(b)) expandedBuckets.delete(b);
-        else expandedBuckets.add(b);
+        activeResultTheme = btn.getAttribute("data-theme");
         renderResults();
       });
     });

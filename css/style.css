@@ -1424,47 +1424,37 @@ header.top p.subtitle {
 .risk-banner.duplicate { background: var(--dup-bg); border-color: var(--dup-border); color: var(--dup-text); }
 .risk-banner.advisory { background: var(--info-bg); border-color: var(--info-border); color: var(--info-text); }
 
-.result-filter-row {
+/* 상단 메뉴(약확인/복약알림/...) 탭바와 같은 스타일로, 결과도 노인주의/임부금기/
+   용량주의 등 테마별 탭으로 나눠 보여준다. */
+.result-theme-bar {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 4px 0 14px;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px;
+  margin: 4px 0 16px;
+  overflow-x: auto;
 }
-.result-filter-chip {
+.result-theme-btn {
+  flex: 1;
+  white-space: nowrap;
+  border: none;
+  background: transparent;
+  padding: 10px 12px;
+  border-radius: 999px;
   font-size: calc(13.5px * var(--font-zoom, 1));
   font-weight: 700;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 2px solid var(--border);
-  background: var(--card-bg);
   color: var(--text-sub);
   cursor: pointer;
 }
-.result-filter-chip.active {
-  border-color: var(--primary);
+.result-theme-btn:hover { background: var(--primary-light); }
+.result-theme-btn.active {
   background: var(--primary);
   color: #fff;
 }
 
-.result-section { margin-bottom: 14px; }
-.result-section-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: calc(15px * var(--font-zoom, 1));
-  font-weight: 800;
-  color: var(--text);
-  cursor: pointer;
-}
-.result-section-chevron { color: var(--text-sub); font-size: calc(12px * var(--font-zoom, 1)); }
-.result-section-count { margin-left: auto; color: var(--text-sub); font-weight: 600; }
-.result-section-body { padding-top: 10px; }
+.result-theme-panel { padding-top: 2px; }
 
 .result-card {
   border-radius: 12px;
@@ -1669,8 +1659,7 @@ body.mode-expert .lay-only { display: none; }
   .expert-only { display: block !important; }
 
   /* 화면에서 접어둔 심각도 섹션도 인쇄물에는 전부 펼쳐서 보여준다 */
-  .result-section-body[hidden] { display: block !important; }
-  .result-filter-row { display: none !important; }
+  .result-theme-panel[hidden] { display: block !important; }
 
   .card {
     box-shadow: none;
