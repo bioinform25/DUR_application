@@ -92,6 +92,9 @@
     allergyList: document.getElementById("allergy-list"),
     allergyEmptyMsg: document.getElementById("allergy-empty-msg"),
     safetyLetterList: document.getElementById("safety-letter-list"),
+    dashboardBasketCount: document.getElementById("dashboard-basket-count"),
+    dashboardRiskLevel: document.getElementById("dashboard-risk-level"),
+    dashboardReminderCount: document.getElementById("dashboard-reminder-count"),
     pillFinderBtn: document.getElementById("pill-finder-btn"),
     pillFinderPanel: document.getElementById("pill-finder-panel"),
     pillFinderShape: document.getElementById("pill-finder-shape"),
@@ -1318,8 +1321,37 @@
     return `<div class="allergy-alert allergy-alert-top">🚨 등록하신 알레르기 성분이 포함된 약이 있습니다<br>${lines}</div>`;
   }
 
+  // 넓은 화면 맨 위에 항상 보이는 요약 카드 - 바구니/알림 상태가 바뀔 때마다
+  // renderResults()/renderTodaySchedule()에서 함께 호출해 최신 상태를 유지한다.
+  function renderDashboardSummary() {
+    if (!el.dashboardBasketCount) return;
+
+    el.dashboardBasketCount.textContent = `${state.basket.length}개`;
+
+    if (state.basket.length === 0) {
+      el.dashboardRiskLevel.textContent = "-";
+    } else {
+      const matches = analyzeBasket();
+      el.dashboardRiskLevel.textContent = matches.length ? buildRiskSummary(matches).level : "낮음";
+    }
+
+    const now = new Date();
+    const todayDow = now.getDay();
+    const todayStr = now.toISOString().slice(0, 10);
+    let remaining = 0;
+    for (const r of reminders) {
+      if (!getReminderDays(r).includes(todayDow)) continue;
+      for (const t of r.times) {
+        if (!takenDoses.has(`${r.id}_${t}_${todayStr}`)) remaining++;
+      }
+    }
+    el.dashboardReminderCount.textContent = reminders.length ? `${remaining}건` : "-";
+  }
+
   function renderResults() {
     if (!state.drugsData || !state.rulesData) return;
+
+    renderDashboardSummary();
 
     const allergyBanner = buildAllergyBanner();
 
@@ -1668,6 +1700,8 @@
   // 등록된 알림 중 "오늘 요일"에 해당하는 시간만 하루 일정표로 모아 보여준다.
   // 복용 완료 체크를 하면 시간이 지나지 않았어도 완료로 표시되고, 알림도 다시 안 울린다.
   function renderTodaySchedule() {
+    renderDashboardSummary();
+
     const now = new Date();
     const todayDow = now.getDay();
     const todayStr = now.toISOString().slice(0, 10);

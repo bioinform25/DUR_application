@@ -59,6 +59,26 @@
 
   <div class="tab-panel" data-panel="check">
 
+  <section class="card dashboard-summary-card no-print" id="dashboard-summary-card">
+    <div class="dashboard-summary-row">
+      <div class="dashboard-stat">
+        <span class="dashboard-stat-value" id="dashboard-basket-count">0개</span>
+        <span class="dashboard-stat-label">담은 약</span>
+      </div>
+      <div class="dashboard-stat">
+        <span class="dashboard-stat-value" id="dashboard-risk-level">-</span>
+        <span class="dashboard-stat-label">종합 위험도</span>
+      </div>
+      <div class="dashboard-stat">
+        <span class="dashboard-stat-value" id="dashboard-reminder-count">-</span>
+        <span class="dashboard-stat-label">오늘 남은 복약</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="check-layout">
+  <div class="check-col-left">
+
   <section class="card">
     <h2>1. 복용 중인 약 검색해서 담기</h2>
     <div class="search-wrap">
@@ -137,6 +157,9 @@
     </div>
   </section>
 
+  </div><!-- /check-col-left -->
+  <div class="check-col-right">
+
   <section class="card">
     <div class="card-header-row">
       <h2>3. 병용금기 · 주의사항 분석 결과</h2>
@@ -148,6 +171,9 @@
     </div>
     <div id="results"></div>
   </section>
+
+  </div><!-- /check-col-right -->
+  </div><!-- /check-layout -->
 
   </div><!-- /tab-panel: check -->
 
